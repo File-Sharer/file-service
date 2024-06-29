@@ -1,4 +1,4 @@
 .env
-!.sql
+*.sql
 hasher_pbs/
 files/
