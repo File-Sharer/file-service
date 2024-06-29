@@ -16,13 +16,13 @@ func NewFileRepo(db *pgx.Conn) *FileRepo {
 }
 
 func (r *FileRepo) Create(ctx context.Context, file *model.File) error {
-	_, err := r.db.Exec(ctx, "insert into files(id, creator_id, is_public) values($1, $2, $3)", file.ID, file.CreatorID, file.IsPublic)
+	_, err := r.db.Exec(ctx, "insert into files(id, creator_id, is_public, filename, download_filename) values($1, $2, $3, $4, $5)", file.ID, file.CreatorID, file.IsPublic, file.Filename, file.DownloadFilename)
 	return err
 }
 
 func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var file model.File
-	if err := r.db.QueryRow(ctx, "select id, creator_id, is_public, date_added from files where id = $1", id).Scan(&file.ID, &file.CreatorID, &file.IsPublic, &file.DateAdded); err != nil  {
+	if err := r.db.QueryRow(ctx, "select id, creator_id, is_public, filename, download_filename, date_added from files where id = $1", id).Scan(&file.ID, &file.CreatorID, &file.IsPublic, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
 		return nil, err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -35,11 +36,15 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 	}
 	fileObj.ID = hash.GetHash()
 
+	ext := filepath.Ext(file.Filename)
+	filename := fileObj.ID + ext
+	fileObj.Filename = filename
+
 	if err := s.repo.Postgres.File.Create(ctx, fileObj); err != nil {
 		return err
 	}
 
-	file.Filename = fileObj.ID
+	file.Filename = filename
 	err = saveFile(file, "files")
 	return err
 }
@@ -56,7 +61,14 @@ func saveFile(file *multipart.FileHeader, dist string) error {
 	}
 	defer createdFile.Close()
 
-	return nil
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	_, err = io.Copy(createdFile, src)
+	return err
 }
 
 func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*model.File, error) {

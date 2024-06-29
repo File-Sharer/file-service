@@ -8,6 +8,7 @@ import (
 
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/service"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
@@ -25,12 +26,19 @@ func (h *Handler) InitRoutes() *gin.Engine {
 
 	router.SetTrustedProxies(nil)
 
+	router.Use(cors.New(cors.Config{
+		AllowAllOrigins: true,
+		AllowHeaders: []string{"Authorization", "Content-Type"},
+		ExposeHeaders: []string{"filename"},
+	}))
+
 	api := router.Group("/api")
 	{
 		file := api.Group("/file")
 		{
 			file.POST("", h.mwAuth, h.fileCreate)
 			file.GET("/:id", h.mwAuth, h.fileGet)
+			file.GET("/dl/:id", h.mwAuth, h.fileDownload)
 			file.PATCH("/:file_id/:user_id", h.mwAuth, h.fileAddPermission)
 		}
 	}
