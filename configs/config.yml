@@ -1,0 +1,9 @@
+app:
+  host: "localhost"
+  port: "9000"
+
+hasherService:
+  target: "localhost:8090"
+
+userService:
+  host: "localhost:8080"
