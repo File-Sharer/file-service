@@ -34,12 +34,13 @@ func (h *Handler) InitRoutes() *gin.Engine {
 
 	api := router.Group("/api")
 	{
-		file := api.Group("/file")
+		files := api.Group("/files")
 		{
-			file.POST("", h.mwAuth, h.fileCreate)
-			file.GET("/:id", h.mwAuth, h.fileGet)
-			file.GET("/dl/:id", h.mwAuth, h.fileDownload)
-			file.PATCH("/:file_id/:user_id", h.mwAuth, h.fileAddPermission)
+			files.POST("", h.mwAuth, h.filesCreate)
+			files.GET("/:id", h.mwAuth, h.filesGet)
+			files.GET("", h.mwAuth, h.filesFindUser)
+			files.GET("/dl/:id", h.mwAuth, h.filesDownload)
+			files.PATCH("/:file_id/:user_id", h.mwAuth, h.filesAddPermission)
 		}
 	}
 

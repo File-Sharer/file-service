@@ -10,6 +10,7 @@ import (
 type File interface {
 	Create(ctx context.Context, file *model.File) error
 	FindByID(ctx context.Context, id string) (*model.File, error)
+	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, fileID string, userID string) error
 	HasPermission(ctx context.Context, fileID string, userID string) (bool, error)
 }

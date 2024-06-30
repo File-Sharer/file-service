@@ -29,6 +29,30 @@ func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error)
 	return &file, nil
 }
 
+func (r *FileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
+	rows, err := r.db.Query(ctx, "select id, creator_id, is_public, filename, download_filename, date_added from files where creator_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var files []*model.File
+	for rows.Next() {
+		var file model.File
+		if err := rows.Scan(&file.ID, &file.CreatorID, &file.IsPublic, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil {
+			return nil, err
+		}
+
+		files = append(files, &file)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
 func (r *FileRepo) AddPermission(ctx context.Context, fileID string, userID string) error {
 	_, err := r.db.Exec(ctx, "insert into permissions(file_id, user_id) values($1, $2)", fileID, userID)
 	return err

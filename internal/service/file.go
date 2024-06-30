@@ -40,6 +40,10 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 	filename := fileObj.ID + ext
 	fileObj.Filename = filename
 
+	if err := s.repo.Redis.File.Delete(ctx, userFilesPrefix + fileObj.CreatorID); err != nil {
+		return err
+	}
+
 	if err := s.repo.Postgres.File.Create(ctx, fileObj); err != nil {
 		return err
 	}
@@ -75,12 +79,10 @@ func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*
 	file, err := s.repo.Redis.File.Find(ctx, filePrefix + id)
 	if err == nil {
 		if file.CreatorID == userID {
-			fmt.Println("HELLO FILE FROM REDIS")
 			return file, nil
 		}
 
 		if file.IsPublic {
-			fmt.Println("HELLO FILE FROM REDIS")
 			return file, nil
 		}
 
@@ -90,7 +92,6 @@ func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*
 		}
 
 		if permission {
-			fmt.Println("HELLO FILE FROM REDIS")
 			return file, nil
 		}
 
@@ -116,12 +117,10 @@ func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*
 	}
 
 	if fileDB.CreatorID == userID {
-		fmt.Println("HELLO FILE FROM POSTGRES")
 		return fileDB, nil
 	}
 
 	if fileDB.IsPublic {
-		fmt.Println("HELLO FILE FROM POSTGRES")
 		return fileDB, nil
 	}
 
@@ -131,17 +130,44 @@ func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*
 	}
 
 	if permission {
-		fmt.Println("HELLO FILE FROM POSTGRES")
 		return fileDB, nil
 	}
 
 	return nil, errNoAccess
 }
 
+func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
+	files, err := s.repo.Redis.File.FindMany(ctx, userFilesPrefix + userID)
+	if err == nil {
+		fmt.Println("HELLO USER FILES FROM REDIS")
+		return files, nil
+	}
+
+	if err != redis.Nil {
+		return nil, err
+	}
+
+	filesDB, err := s.repo.Postgres.File.FindUserFiles(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	filesJSON, err := json.Marshal(filesDB)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.Redis.File.Create(ctx, userFilesPrefix + userID, filesJSON, time.Hour * 12); err != nil {
+		return nil, err
+	}
+
+	fmt.Println("HELLO USER FILES FROM POSTGRES")
+	return filesDB, nil
+}
+
 func (s *FileService) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
 	permission, err := s.repo.Redis.File.HasPermission(ctx, PermissionPrefix(fileID, userID))
 	if err == nil {
-		fmt.Println("HELLO PERMISSION FROM REDIS!")
 		return permission, nil
 	}
 
@@ -158,7 +184,6 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 		return false, err
 	}
 
-	fmt.Println("HELLO PERMISSION FROM POSTGRES!")
 	return permissionDB, nil
 }
 
@@ -172,7 +197,7 @@ func (s *FileService) AddPermission(ctx context.Context, fileID string, userID s
 		return errNoAccess
 	}
 
-	if err := s.repo.Redis.Delete(ctx, PermissionPrefix(fileID, userToAdd)); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(fileID, userToAdd)); err != nil {
 		return err
 	}
 

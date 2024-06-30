@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (h *Handler) fileCreate(c *gin.Context) {
+func (h *Handler) filesCreate(c *gin.Context) {
 	user := h.getUser(c)
 
 	var fileObj model.File
@@ -48,7 +48,7 @@ func (h *Handler) fileCreate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
 }
 
-func (h *Handler) fileGet(c *gin.Context) {
+func (h *Handler) filesGet(c *gin.Context) {
 	user := h.getUser(c)
 
 	id := c.Param("id")
@@ -62,7 +62,19 @@ func (h *Handler) fileGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": file})
 }
 
-func (h *Handler) fileDownload(c *gin.Context) {
+func (h *Handler) filesFindUser(c *gin.Context) {
+	user := h.getUser(c)
+
+	files, err := h.services.File.FindUserFiles(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": files})
+}
+
+func (h *Handler) filesDownload(c *gin.Context) {
 	user := h.getUser(c)
 
 	id := c.Param("id")
@@ -86,7 +98,7 @@ func (h *Handler) fileDownload(c *gin.Context) {
 	io.Copy(c.Writer, f)
 }
 
-func (h *Handler) fileAddPermission(c *gin.Context) {
+func (h *Handler) filesAddPermission(c *gin.Context) {
 	user := h.getUser(c)
 
 	fileID := c.Param("file_id")

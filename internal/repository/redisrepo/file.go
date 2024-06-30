@@ -37,6 +37,20 @@ func (r *FileRepo) Find(ctx context.Context, key string) (*model.File, error) {
 	return &fileDB, nil
 }
 
+func (r *FileRepo) FindMany(ctx context.Context, key string) ([]*model.File, error) {
+	files, err := r.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var filesDB []*model.File
+	if err := json.Unmarshal([]byte(files), &filesDB); err != nil {
+		return nil, err
+	}
+
+	return filesDB, nil
+}
+
 func (r *FileRepo) HasPermission(ctx context.Context, key string) (bool, error) {
 	permission, err := r.rdb.Get(ctx, key).Result()
 	if err != nil {

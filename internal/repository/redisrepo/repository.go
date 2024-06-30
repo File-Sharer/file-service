@@ -11,6 +11,7 @@ import (
 type File interface {
 	Create(ctx context.Context, key string, value []byte, expiry time.Duration) error
 	Find(ctx context.Context, key string) (*model.File, error)
+	FindMany(ctx context.Context, key string) ([]*model.File, error)
 	HasPermission(ctx context.Context, key string) (bool, error)
 	Delete(ctx context.Context, keys ...string) error
 }
