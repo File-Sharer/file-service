@@ -30,6 +30,10 @@ func NewFileService(repo *repository.Repository, hasherClient pb.HasherClient) *
 }
 
 func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error) {
+	if file.Size > MAX_FILE_SIZE {
+		return nil, errFileIsTooBig
+	}
+	
 	hash, err := s.hasher.Hash(ctx, &pb.HashReq{})
 	if !hash.GetOk() {
 		return nil, err
