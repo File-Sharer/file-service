@@ -29,28 +29,29 @@ func NewFileService(repo *repository.Repository, hasherClient pb.HasherClient) *
 	}
 }
 
-func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) error {
+func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error) {
 	hash, err := s.hasher.Hash(ctx, &pb.HashReq{})
 	if !hash.GetOk() {
-		return err
+		return nil, err
 	}
 	fileObj.ID = hash.GetHash()
 
 	ext := filepath.Ext(file.Filename)
 	filename := fileObj.ID + ext
 	fileObj.Filename = filename
+	fileObj.DateAdded = time.Now()
 
 	if err := s.repo.Redis.File.Delete(ctx, userFilesPrefix + fileObj.CreatorID); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := s.repo.Postgres.File.Create(ctx, fileObj); err != nil {
-		return err
+		return nil, err
 	}
 
 	file.Filename = filename
 	err = saveFile(file, "files")
-	return err
+	return fileObj, err
 }
 
 func saveFile(file *multipart.FileHeader, dist string) error {

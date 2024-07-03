@@ -10,7 +10,7 @@ import (
 )
 
 type File interface {
-	Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) error
+	Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error)
 	FindByID(ctx context.Context, id string, userID string) (*model.File, error)
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, fileID string, userID string, userToAdd string) error

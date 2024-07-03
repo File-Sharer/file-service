@@ -40,12 +40,13 @@ func (h *Handler) filesCreate(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.File.Create(c.Request.Context(), &fileObj, file); err != nil {
+	createdFile, err := h.services.File.Create(c.Request.Context(), &fileObj, file)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": createdFile})
 }
 
 func (h *Handler) filesGet(c *gin.Context) {
