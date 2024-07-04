@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,6 +17,7 @@ import (
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 )
 
 type FileService struct {
@@ -192,20 +195,66 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 	return permissionDB, nil
 }
 
-func (s *FileService) AddPermission(ctx context.Context, fileID string, userID string, userToAdd string) error {
-	file, err := s.FindByID(ctx, fileID, userID)
+func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData) error {
+	file, err := s.FindByID(ctx, data.FileID, data.UserID)
 	if err != nil {
 		return err
 	}
 
-	if file.CreatorID != userID {
+	if file.CreatorID != data.UserID {
 		return errNoAccess
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(fileID, userToAdd)); err != nil {
+	err = doReq(data.UserToken, data.UserToAdd)
+	if err != nil {
 		return err
 	}
 
-	err = s.repo.Postgres.File.AddPermission(ctx, fileID, userToAdd)
+	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(data.FileID, data.UserToAdd)); err != nil {
+		return err
+	}
+
+	err = s.repo.Postgres.File.AddPermission(ctx, data.FileID, data.UserToAdd)
 	return err
+}
+
+func doReq(token string, userToAdd string) error {
+	target := viper.GetString("userService.host")
+	endpoint := "/api/user/" + userToAdd
+
+	client := &http.Client{}
+
+	req := &http.Request{
+		Proto: "HTTP/1.1",
+		Method: "GET",
+		URL: &url.URL{
+			Scheme: "http",
+			Host: target,
+			Path: endpoint,
+		},
+		Header: map[string][]string{
+			"Authorization": {"Bearer " + token},
+		},
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return errUserNotFound
+	}
+
+	var userRes model.UserRes
+	if err := json.NewDecoder(res.Body).Decode(&userRes); err != nil {
+		return err
+	}
+
+	if !userRes.Ok {
+		return errUserNotFound
+	}
+
+	return nil
 }

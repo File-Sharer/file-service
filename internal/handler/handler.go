@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/service"
@@ -29,6 +31,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	router.Use(cors.New(cors.Config{
 		AllowAllOrigins: true,
 		AllowHeaders: []string{"Authorization", "Content-Type"},
+		AllowMethods: []string{"POST", "GET", "PATCH"},
 		ExposeHeaders: []string{"filename"},
 	}))
 
@@ -45,6 +48,20 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	}
 
 	return router
+}
+
+func (h *Handler) getToken(c *gin.Context) (string, error) {
+	header := c.GetHeader("Authorization")
+	if !strings.HasPrefix(header, "Bearer ") {
+		return "", errors.New("no provided token")
+	}
+
+	token := strings.Split(header, " ")[1]
+	if token == "" {
+		return "", errors.New("no provided token")
+	}
+
+	return token, nil
 }
 
 func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {

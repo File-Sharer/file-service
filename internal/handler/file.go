@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/File-Sharer/file-service/internal/model"
+	"github.com/File-Sharer/file-service/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -104,8 +105,20 @@ func (h *Handler) filesAddPermission(c *gin.Context) {
 
 	fileID := c.Param("file_id")
 	userToAdd := c.Param("user_id")
+
+	userToken, err := h.getToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
 	
-	if err := h.services.File.AddPermission(c.Request.Context(), fileID, user.ID, userToAdd); err != nil {
+	data := &service.AddPermissionData{
+		UserToken: userToken,
+		FileID: fileID,
+		UserID: user.ID,
+		UserToAdd: userToAdd,
+	}
+	if err := h.services.File.AddPermission(c.Request.Context(), data); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
