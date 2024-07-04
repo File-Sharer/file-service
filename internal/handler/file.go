@@ -87,7 +87,7 @@ func (h *Handler) filesDownload(c *gin.Context) {
 		return
 	}
 
-	filePath := filepath.Join("files/", file.Filename)
+	filePath := filepath.Join("files/" + file.CreatorID, file.Filename)
 
 	f, err := os.Open(filePath)
 	if err != nil {

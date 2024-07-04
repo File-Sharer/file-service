@@ -56,7 +56,7 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 	}
 
 	file.Filename = filename
-	err = saveFile(file, "files")
+	err = saveFile(file, "files/" + fileObj.CreatorID)
 	return fileObj, err
 }
 
