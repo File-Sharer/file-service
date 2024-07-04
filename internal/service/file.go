@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -147,7 +146,6 @@ func (s *FileService) FindByID(ctx context.Context, id string, userID string) (*
 func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
 	files, err := s.repo.Redis.File.FindMany(ctx, userFilesPrefix + userID)
 	if err == nil {
-		fmt.Println("HELLO USER FILES FROM REDIS")
 		return files, nil
 	}
 
@@ -169,7 +167,6 @@ func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*mode
 		return nil, err
 	}
 
-	fmt.Println("HELLO USER FILES FROM POSTGRES")
 	return filesDB, nil
 }
 
