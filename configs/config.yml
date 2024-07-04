@@ -6,4 +6,7 @@ hasherService:
   target: "localhost:8090"
 
 userService:
-  host: "localhost:8080"
+  target: "localhost:8080"
+
+frontend:
+  origin: "http://localhost:5173"

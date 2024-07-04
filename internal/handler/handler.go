@@ -29,7 +29,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	router.SetTrustedProxies(nil)
 
 	router.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
+		AllowOrigins: []string{viper.GetString("frontend.origin")},
 		AllowHeaders: []string{"Authorization", "Content-Type"},
 		AllowMethods: []string{"POST", "GET", "PATCH"},
 		ExposeHeaders: []string{"filename"},
@@ -65,7 +65,7 @@ func (h *Handler) getToken(c *gin.Context) (string, error) {
 }
 
 func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {
-	target := viper.GetString("userService.host")
+	target := viper.GetString("userService.target")
 	endpoint := "/api/user"
 
 	client := &http.Client{}

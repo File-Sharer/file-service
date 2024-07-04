@@ -219,7 +219,7 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 }
 
 func doReq(token string, userToAdd string) error {
-	target := viper.GetString("userService.host")
+	target := viper.GetString("userService.target")
 	endpoint := "/api/user/" + userToAdd
 
 	client := &http.Client{}
