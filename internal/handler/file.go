@@ -104,7 +104,7 @@ func (h *Handler) filesAddPermission(c *gin.Context) {
 	user := h.getUser(c)
 
 	fileID := c.Param("file_id")
-	userToAdd := c.Param("user_id")
+	userToAddID := c.Param("user_id")
 
 	userToken, err := h.getToken(c)
 	if err != nil {
@@ -116,7 +116,7 @@ func (h *Handler) filesAddPermission(c *gin.Context) {
 		UserToken: userToken,
 		FileID: fileID,
 		UserID: user.ID,
-		UserToAdd: userToAdd,
+		UserToAddID: userToAddID,
 	}
 	if err := h.services.File.AddPermission(c.Request.Context(), data); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})

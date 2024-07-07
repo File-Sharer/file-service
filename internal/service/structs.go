@@ -1,8 +1,8 @@
 package service
 
 type AddPermissionData struct {
-	UserToken string
-	FileID    string
-	UserID    string
-	UserToAdd string
+	UserToken   string
+	FileID      string
+	UserID      string
+	UserToAddID string
 }

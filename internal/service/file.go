@@ -220,7 +220,7 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 }
 
 func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData) error {
-	file, err := s.ProtectedFindByID(ctx, data.FileID, data.UserID)
+	file, err := s.FindByID(ctx, data.FileID)
 	if err != nil {
 		return err
 	}
@@ -229,22 +229,21 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 		return errNoAccess
 	}
 
-	err = doReq(data.UserToken, data.UserToAdd)
-	if err != nil {
+	if err := validateUser(data.UserToken, data.UserToAddID); err != nil {
 		return err
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(data.FileID, data.UserToAdd)); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(data.FileID, data.UserToAddID)); err != nil {
 		return err
 	}
 
-	err = s.repo.Postgres.File.AddPermission(ctx, data.FileID, data.UserToAdd)
+	err = s.repo.Postgres.File.AddPermission(ctx, data.FileID, data.UserToAddID)
 	return err
 }
 
-func doReq(token string, userToAdd string) error {
+func validateUser(token string, userToAddID string) error {
 	target := viper.GetString("userService.target")
-	endpoint := "/api/user/" + userToAdd
+	endpoint := "/api/user/" + userToAddID
 
 	client := &http.Client{}
 
@@ -293,7 +292,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return errNoAccess
 	}
 
-	if err := s.clearRedis(ctx, filePrefix + fileID, userFilesPrefix + file.CreatorID); err != nil {
+	if err := s.clearRedisCache(ctx, filePrefix + fileID, userFilesPrefix + file.CreatorID); err != nil {
 		return err
 	}
 
@@ -310,7 +309,7 @@ func deleteFile(filename string, path string) error {
 	return os.Remove(filePath)
 }
 
-func (s *FileService) clearRedis(ctx context.Context, fileKey string, userFilesKey string) error {
+func (s *FileService) clearRedisCache(ctx context.Context, fileKey string, userFilesKey string) error {
 	if err := s.repo.Redis.File.Delete(ctx, fileKey); err != nil {
 		return err
 	}
