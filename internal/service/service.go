@@ -11,9 +11,11 @@ import (
 
 type File interface {
 	Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error)
-	FindByID(ctx context.Context, id string, userID string) (*model.File, error)
+	ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error)
+	FindByID(ctx context.Context, id string) (*model.File, error)
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, data *AddPermissionData) error
+	Delete(ctx context.Context, fileID string, user *model.User) error
 }
 
 type Service struct {

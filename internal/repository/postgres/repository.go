@@ -13,6 +13,7 @@ type File interface {
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, fileID string, userID string) error
 	HasPermission(ctx context.Context, fileID string, userID string) (bool, error)
+	Delete(ctx context.Context, id string) error
 }
 
 type PostgresRepository struct {
