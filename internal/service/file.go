@@ -36,11 +36,11 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 		return nil, errFileIsTooBig
 	}
 	
-	hash, err := s.hasher.Hash(ctx, &pb.HashReq{})
-	if !hash.GetOk() {
+	res, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
+	if !res.GetOk() {
 		return nil, err
 	}
-	fileObj.ID = hash.GetHash()
+	fileObj.ID = res.GetHash()
 
 	ext := filepath.Ext(file.Filename)
 	filename := fileObj.ID + ext
