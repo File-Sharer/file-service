@@ -47,6 +47,11 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 	fileObj.Filename = filename
 	fileObj.DateAdded = time.Now()
 
+	downloadFilenameExt := filepath.Ext(fileObj.DownloadFilename)
+	if downloadFilenameExt == "" || downloadFilenameExt != ext {
+		fileObj.DownloadFilename += ext
+	}
+
 	if err := s.repo.Redis.File.Delete(ctx, userFilesPrefix + fileObj.CreatorID); err != nil {
 		return nil, err
 	}
