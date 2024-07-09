@@ -247,7 +247,7 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 }
 
 func validateUser(token string, userToAddID string) error {
-	target := viper.GetString("userService.target")
+	host := viper.GetString("userService.host")
 	endpoint := "/api/user/" + userToAddID
 
 	client := &http.Client{}
@@ -257,7 +257,7 @@ func validateUser(token string, userToAddID string) error {
 		Method: "GET",
 		URL: &url.URL{
 			Scheme: "http",
-			Host: target,
+			Host: host,
 			Path: endpoint,
 		},
 		Header: map[string][]string{

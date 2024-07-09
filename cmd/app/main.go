@@ -33,7 +33,7 @@ func main() {
 		logrus.Fatalf("error initializing env: %s", err.Error())
 	}
 
-	hasherServiceConn, err := grpc.NewClient(viper.GetString("hasherService.target"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	hasherServiceConn, err := grpc.NewClient(viper.GetString("hasherService.host"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logrus.Fatalf("error connecting to grpc hasher service: %s", err.Error())
 	}

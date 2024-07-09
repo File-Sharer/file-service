@@ -66,7 +66,7 @@ func (h *Handler) getToken(c *gin.Context) (string, error) {
 }
 
 func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {
-	target := viper.GetString("userService.target")
+	host := viper.GetString("userService.host")
 	endpoint := "/api/user"
 
 	client := &http.Client{}
@@ -76,7 +76,7 @@ func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {
 		Method: "GET",
 		URL: &url.URL{
 			Scheme: "http",
-			Host: target,
+			Host: host,
 			Path: endpoint,
 		},
 		Header: map[string][]string{

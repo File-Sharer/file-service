@@ -3,10 +3,10 @@ app:
   port: "9000"
 
 hasherService:
-  target: "localhost:8090"
+  host: "localhost:8090"
 
 userService:
-  target: "localhost:8080"
+  host: "localhost:8080"
 
 frontend:
   origin: "http://localhost:5173"
