@@ -43,7 +43,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			files.GET("/:id", h.mwAuth, h.filesGet)
 			files.GET("", h.mwAuth, h.filesFindUser)
 			files.GET("/:id/dl", h.mwAuth, h.filesDownload)
-			files.PATCH("/:file_id/:user_id", h.mwAuth, h.filesAddPermission)
+			files.PUT("/:file_id/:user_id", h.mwAuth, h.filesAddPermission)
 			files.DELETE("/:id", h.mwAuth, h.filesDelete)
 		}
 	}
