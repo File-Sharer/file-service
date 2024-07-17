@@ -10,3 +10,9 @@ type File struct {
 	DownloadFilename  string    `json:"downloadFilename"`
 	DateAdded         time.Time `json:"dateAdded"`
 }
+
+type DeleteFileReq struct {
+	FileID   string `json:"id"`
+	Filename string `json:"filename"`
+	Path     string `json:"path"`
+}

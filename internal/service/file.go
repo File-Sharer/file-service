@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -14,19 +15,23 @@ import (
 
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
+	"github.com/File-Sharer/file-service/internal/mq"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
 type FileService struct {
 	repo *repository.Repository
+	rabbitMQ *mq.Conn
 	hasher pb.HasherClient
 }
 
-func NewFileService(repo *repository.Repository, hasherClient pb.HasherClient) *FileService {
+func NewFileService(repo *repository.Repository, rabbitMQ *mq.Conn, hasherClient pb.HasherClient) *FileService {
 	return &FileService{
 		repo: repo,
+		rabbitMQ: rabbitMQ,
 		hasher: hasherClient,
 	}
 }
@@ -297,21 +302,19 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return errNoAccess
 	}
 
-	if err := s.clearRedisCache(ctx, filePrefix + fileID, userFilesPrefix + file.CreatorID); err != nil {
+	if err := s.clearRedisCache(ctx, filePrefix + fileID, userFilesPrefix + user.ID); err != nil {
 		return err
 	}
 
-	if err := s.repo.Postgres.File.Delete(ctx, fileID); err != nil {
+	msg, err := json.Marshal(model.DeleteFileReq{
+		FileID: file.ID,
+		Path: fmt.Sprintf("files/%s/%s", user.ID, file.Filename),
+	})
+	if err != nil {
 		return err
 	}
-
-	err = deleteFile(file.Filename, "files/" + file.CreatorID)
+	err = s.rabbitMQ.Publish(mqFilesDelete, msg)
 	return err
-}
-
-func deleteFile(filename string, path string) error {
-	filePath := filepath.Join(path, filename)
-	return os.Remove(filePath)
 }
 
 func (s *FileService) clearRedisCache(ctx context.Context, fileKey string, userFilesKey string) error {
@@ -321,4 +324,41 @@ func (s *FileService) clearRedisCache(ctx context.Context, fileKey string, userF
 
 	err := s.repo.Redis.File.Delete(ctx, userFilesKey)
 	return err
+}
+
+func (s *FileService) FilesDeleteConsumer() {
+	msgs, err := s.rabbitMQ.Consume(mqFilesDelete)
+	if err != nil {
+		logrus.Fatalf("failed to start consumer: %s", err.Error())
+	}
+
+	go func ()  {
+		for msg := range msgs {
+			var message model.DeleteFileReq
+			if err := json.Unmarshal(msg.Body, &message); err != nil {
+				logrus.Errorf("failed unmarshal message: %s", err.Error())
+				msg.Nack(false, true)
+				continue
+			}
+
+			if err := s.repo.Postgres.File.Delete(context.Background(), message.FileID); err != nil {
+				logrus.Errorf("failed delete file from database: %s", err.Error())
+				msg.Nack(false, true)
+				continue
+			}
+
+			if err := deleteFile(message.Path); err != nil {
+				logrus.Errorf("failed delete file by path(%s): %s", message.Path, err.Error())
+				msg.Nack(false, true)
+				continue
+			}
+
+			msg.Ack(false)
+			logrus.Print("file deleted successfully!")
+		}
+	}()
+}
+
+func deleteFile(path string) error {
+	return os.Remove(path)
 }
