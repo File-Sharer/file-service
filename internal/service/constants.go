@@ -2,4 +2,5 @@ package service
 
 const (
 	MAX_FILE_SIZE = 268_435_456
+	MAX_USER_FILES_DIR_SIZE = 805_306_368
 )

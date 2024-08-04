@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -37,8 +38,21 @@ func NewFileService(repo *repository.Repository, rabbitMQ *mq.Conn, hasherClient
 }
 
 func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error) {
+	userFilesDir := "files/" + fileObj.CreatorID
+	if err := os.MkdirAll(userFilesDir, os.ModePerm); err != nil {
+		return nil, err
+	}
+	
 	if file.Size > MAX_FILE_SIZE {
 		return nil, errFileIsTooBig
+	}
+
+	userFilesDirSize, err := getDirSize(userFilesDir)
+	if err != nil {
+		return nil, err
+	}
+	if userFilesDirSize + file.Size >= MAX_USER_FILES_DIR_SIZE {
+		return nil, errMaxUploadsReached
 	}
 	
 	res, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
@@ -66,15 +80,25 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 	}
 
 	file.Filename = filename
-	err = saveFile(file, "files/" + fileObj.CreatorID)
+	err = saveFile(file, userFilesDir)
 	return fileObj, err
 }
 
-func saveFile(file *multipart.FileHeader, dist string) error {
-	if err := os.MkdirAll(dist, os.ModePerm); err != nil  {
-		return err
-	}
+func getDirSize(dir string) (int64, error) {
+	var size int64
+	err := filepath.Walk(dir, func (path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size, err
+}
 
+func saveFile(file *multipart.FileHeader, dist string) error {
 	filePath := filepath.Join(dist, file.Filename)
 	createdFile, err := os.Create(filePath)
 	if err != nil {
