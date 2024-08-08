@@ -67,6 +67,11 @@ func (r *FileRepo) HasPermission(ctx context.Context, fileID string, userID stri
 	return exists, nil
 }
 
+func (r *FileRepo) DeletePermission(ctx context.Context, fileID string, userID string) error {
+	_, err := r.db.Exec(ctx, "delete from files where file_id = $1 and user_id = $2", fileID, userID)
+	return err
+}
+
 func (r *FileRepo) Delete(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, "delete from files where id = $1", id)
 	return err
