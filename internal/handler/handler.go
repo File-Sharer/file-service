@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
+	"os"
 	"strings"
 
+	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/service"
 	"github.com/gin-contrib/cors"
@@ -17,10 +16,14 @@ import (
 
 type Handler struct {
 	services *service.Service
+	hasherClient pb.HasherClient
 }
 
-func New(services *service.Service) *Handler {
-	return &Handler{services: services}
+func New(services *service.Service, hasherClient pb.HasherClient) *Handler {
+	return &Handler{
+		services: services,
+		hasherClient: hasherClient,
+	}
 }
 
 func (h *Handler) InitRoutes() *gin.Engine {
@@ -66,44 +69,12 @@ func (h *Handler) getToken(c *gin.Context) (string, error) {
 }
 
 func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {
-	host := viper.GetString("userService.host")
-	endpoint := "/api/user"
-
-	client := &http.Client{}
-
-	req := &http.Request{
-		Proto: "HTTP/1.1",
-		Method: "GET",
-		URL: &url.URL{
-			Scheme: "http",
-			Host: host,
-			Path: endpoint,
-		},
-		Header: map[string][]string{
-			"Authorization": {"Bearer " + token},
-		},
-	}
-
-	res, err := client.Do(req)
+	user, err := h.hasherClient.DecodeJWT(context.Background(), &pb.DecodeJWTReq{Secret: os.Getenv("HASHER_SECRET"), Jwt: token})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user data: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get user data: status code %d", res.StatusCode)
+		return nil, err
 	}
 
-	var userRes model.UserRes
-	if err := json.NewDecoder(res.Body).Decode(&userRes); err != nil {
-		return nil, fmt.Errorf("failed to decode user data: %w", err)
-	}
-
-	if !userRes.Ok {
-		return nil, fmt.Errorf("failed to get user data: %s", userRes.Error)
-	}
-
-	return &userRes.Data, nil
+	return &model.User{ID: user.UserId, Role: user.Role}, nil
 }
 
 func (h *Handler) getUser(c *gin.Context) *model.User {

@@ -80,7 +80,7 @@ func main() {
 
 	repo := repository.New(db, rdb)
 	services := service.New(repo, rabbitMQ, hasherClient)
-	handlers := handler.New(services)
+	handlers := handler.New(services, hasherClient)
 
 	srv := server.New()
 	serverConfig := &config.ServerConfig{

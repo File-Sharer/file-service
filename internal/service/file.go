@@ -263,7 +263,7 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 		return errNoAccess
 	}
 
-	if err := validateUser(data.UserToken, data.UserToAddID); err != nil {
+	if err := checkUserExistence(data.UserToken, data.UserToAddID); err != nil {
 		return err
 	}
 
@@ -275,9 +275,9 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 	return err
 }
 
-func validateUser(token string, userToAddID string) error {
+func checkUserExistence(token string, userID string) error {
 	host := viper.GetString("userService.host")
-	endpoint := "/api/user/" + userToAddID
+	endpoint := "/api/user/" + userID
 
 	client := &http.Client{}
 
