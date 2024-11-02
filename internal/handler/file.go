@@ -21,7 +21,7 @@ func (h *Handler) filesCreate(c *gin.Context) {
 	isPublicForm := c.PostForm("isPublic")
 	isPublic, err := strconv.ParseBool(isPublicForm)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "isPublic is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "isPublic option is required"})
 		return
 	}
 

@@ -38,6 +38,12 @@ func NewFileService(repo *repository.Repository, rabbitMQ *mq.Conn, hasherClient
 }
 
 func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error) {
+	// Checking user creating files delay
+	delay := s.repo.Redis.Default.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
+	if delay.Err() != redis.Nil {
+		return nil, errWaitDelay
+	}
+
 	userFilesDir := "files/" + fileObj.CreatorID
 	if err := os.MkdirAll(userFilesDir, os.ModePerm); err != nil {
 		return nil, err
@@ -71,7 +77,11 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 		fileObj.DownloadFilename += ext
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, userFilesPrefix + fileObj.CreatorID); err != nil {
+	if err := s.repo.Redis.Default.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID)); err != nil {
 		return nil, err
 	}
 
@@ -117,7 +127,7 @@ func saveFile(file *multipart.FileHeader, dist string) error {
 }
 
 func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error) {
-	file, err := s.repo.Redis.File.Find(ctx, filePrefix + fileID)
+	file, err := s.repo.Redis.File.Find(ctx, FilePrefix(fileID))
 	if err == nil {
 		if file.CreatorID == userID {
 			return file, nil
@@ -153,7 +163,7 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 		return nil, err
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, filePrefix + fileID, fileJSON, time.Hour * 12); err != nil {
+	if err := s.repo.Redis.File.Create(ctx, FilePrefix(fileID), fileJSON, time.Hour * 12); err != nil {
 		return nil, err
 	}
 
@@ -178,7 +188,7 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 }
 
 func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, error) {
-	file, err := s.repo.Redis.File.Find(ctx, filePrefix + id)
+	file, err := s.repo.Redis.File.Find(ctx, FilePrefix(id))
 	if err == nil {
 		return file, nil
 	}
@@ -197,7 +207,7 @@ func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, err
 		return nil, err
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, filePrefix + fileDB.ID, fileJSON,  time.Hour * 12); err != nil {
+	if err := s.repo.Redis.File.Create(ctx, FilePrefix(fileDB.ID), fileJSON,  time.Hour * 12); err != nil {
 		return nil, err
 	}
 
@@ -205,7 +215,7 @@ func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, err
 }
 
 func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
-	files, err := s.repo.Redis.File.FindMany(ctx, userFilesPrefix + userID)
+	files, err := s.repo.Redis.File.FindMany(ctx, UserFilesPrefix(userID))
 	if err == nil {
 		return files, nil
 	}
@@ -326,7 +336,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return errNoAccess
 	}
 
-	if err := s.clearRedisCache(ctx, filePrefix + fileID, userFilesPrefix + user.ID); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID)); err != nil {
 		return err
 	}
 
@@ -338,15 +348,6 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return err
 	}
 	err = s.rabbitMQ.Publish(mqFilesDelete, msg)
-	return err
-}
-
-func (s *FileService) clearRedisCache(ctx context.Context, fileKey string, userFilesKey string) error {
-	if err := s.repo.Redis.File.Delete(ctx, fileKey); err != nil {
-		return err
-	}
-
-	err := s.repo.Redis.File.Delete(ctx, userFilesKey)
 	return err
 }
 
