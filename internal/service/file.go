@@ -53,6 +53,7 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 		return nil, errFileIsTooBig
 	}
 
+	// Checking user uploads size limit
 	userFilesDirSize, err := getDirSize(userFilesDir)
 	if err != nil {
 		return nil, err
@@ -61,26 +62,29 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 		return nil, errMaxUploadsReached
 	}
 	
-	res, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
-	if !res.GetOk() {
+	fileHashIDResp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
+	if !fileHashIDResp.GetOk() {
 		return nil, err
 	}
-	fileObj.ID = res.GetHash()
+	fileObj.ID = fileHashIDResp.GetHash()
 
 	ext := filepath.Ext(file.Filename)
 	filename := fileObj.ID + ext
 	fileObj.Filename = filename
 	fileObj.DateAdded = time.Now()
 
+	// Validating file extension
 	downloadFilenameExt := filepath.Ext(fileObj.DownloadFilename)
 	if downloadFilenameExt == "" || downloadFilenameExt != ext {
 		fileObj.DownloadFilename += ext
 	}
 
+	// Sending user to timeout
 	if err := s.repo.Redis.Default.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2); err != nil {
 		return nil, err
 	}
 
+	// Clear cache
 	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID)); err != nil {
 		return nil, err
 	}
@@ -127,52 +131,17 @@ func saveFile(file *multipart.FileHeader, dist string) error {
 }
 
 func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error) {
-	file, err := s.repo.Redis.File.Find(ctx, FilePrefix(fileID))
-	if err == nil {
-		if file.CreatorID == userID {
-			return file, nil
-		}
-
-		if file.IsPublic {
-			return file, nil
-		}
-
-		permission, err := s.HasPermission(ctx, fileID, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		if permission {
-			return file, nil
-		}
-
-		return nil, errNoAccess
-	}
-
-	if err != redis.Nil {
-		return nil, err
-	}
-
-	fileDB, err := s.repo.Postgres.File.FindByID(ctx, fileID)
+	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, err
 	}
 
-	fileJSON, err := json.Marshal(fileDB)
-	if err != nil {
-		return nil, err
+	if file.CreatorID == userID {
+		return file, nil
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, FilePrefix(fileID), fileJSON, time.Hour * 12); err != nil {
-		return nil, err
-	}
-
-	if fileDB.CreatorID == userID {
-		return fileDB, nil
-	}
-
-	if fileDB.IsPublic {
-		return fileDB, nil
+	if file.IsPublic {
+		return file, nil
 	}
 
 	permission, err := s.HasPermission(ctx, fileID, userID)
@@ -181,7 +150,7 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 	}
 
 	if permission {
-		return fileDB, nil
+		return file, nil
 	}
 
 	return nil, errNoAccess
@@ -271,6 +240,10 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 
 	if file.CreatorID != data.UserID {
 		return errNoAccess
+	}
+
+	if data.UserToAddID == file.CreatorID {
+		return errCantAddPermissionForYourself
 	}
 
 	if err := checkUserExistence(data.UserToken, data.UserToAddID); err != nil {
