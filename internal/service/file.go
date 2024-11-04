@@ -220,16 +220,16 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 		return false, err
 	}
 
-	permissionDB, err := s.repo.Postgres.HasPermission(ctx, fileID, userID)
+	hasPermissionDB, err := s.repo.Postgres.HasPermission(ctx, fileID, userID)
 	if err != nil {
 		return false, err
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, PermissionPrefix(fileID, userID), []byte(strconv.FormatBool(permissionDB)), time.Hour * 24); err != nil {
+	if err := s.repo.Redis.File.Create(ctx, PermissionPrefix(fileID, userID), []byte(strconv.FormatBool(hasPermissionDB)), time.Hour * 24); err != nil {
 		return false, err
 	}
 
-	return permissionDB, nil
+	return hasPermissionDB, nil
 }
 
 func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData) error {
@@ -321,6 +321,25 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return err
 	}
 	err = s.rabbitMQ.Publish(mqFilesDelete, msg)
+	return err
+}
+
+func (s *FileService) DeletePermission(ctx context.Context, data *DeletePermissionData) error {
+	file, err := s.FindByID(ctx, data.FileID)
+	if err != nil {
+		return err
+	}
+
+	if data.UserID != file.CreatorID {
+		return errNoAccess
+	}
+
+	// Clear cache
+	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(file.ID, data.UserToDeleteID)); err != nil {
+		return err
+	}
+
+	err = s.repo.Postgres.File.DeletePermission(ctx, data.FileID, data.UserToDeleteID)
 	return err
 }
 

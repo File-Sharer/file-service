@@ -48,6 +48,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			files.GET("/:id/dl", h.mwAuth, h.filesDownload)
 			files.PUT("/:file_id/:user_id", h.mwAuth, h.filesAddPermission)
 			files.DELETE("/:id", h.mwAuth, h.filesDelete)
+			files.DELETE("/perm/:file_id", h.mwAuth, h.filesDeletePermission)
 		}
 	}
 

@@ -6,3 +6,9 @@ type AddPermissionData struct {
 	UserID      string
 	UserToAddID string
 }
+
+type DeletePermissionData struct {
+	FileID         string
+	UserID         string
+	UserToDeleteID string
+}
