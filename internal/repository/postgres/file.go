@@ -76,3 +76,27 @@ func (r *FileRepo) Delete(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, "delete from files where id = $1", id)
 	return err
 }
+
+func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id string) ([]*model.Permission, error) {
+	rows, err := r.db.Query(ctx, "select file_id, user_id from permissions where file_id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var permissions []*model.Permission
+	for rows.Next() {
+		var permission model.Permission
+		if err := rows.Scan(&permission.FileID, &permission.UserID); err != nil {
+			return nil, err
+		}
+
+		permissions = append(permissions, &permission)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return permissions, nil
+}

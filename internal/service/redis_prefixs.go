@@ -7,6 +7,7 @@ var (
 	permissionPrefix = "%s:%s" // <fileID>:<userID>
 	userFilesPrefix = "user-files:%s" // user-files:<userID>
 	fileCreateDelayPrefix = "file-creating-delay-for:%s" // file-creating-delay-for:<userID>
+	filePermissionsPrefix = "permissions-to:%s" // permissions-to:<fileID>
 )
 
 func FilePrefix(fileID string) string {
@@ -23,4 +24,8 @@ func UserFilesPrefix(userID string) string {
 
 func FileCreateDelayPrefix(userID string) string {
 	return fmt.Sprintf(fileCreateDelayPrefix, userID)
+}
+
+func FilePermissionsPrefix(fileID string) string {
+	return fmt.Sprintf(filePermissionsPrefix, fileID)
 }

@@ -53,9 +53,9 @@ func (h *Handler) filesCreate(c *gin.Context) {
 func (h *Handler) filesGet(c *gin.Context) {
 	user := h.getUser(c)
 
-	id := c.Param("id")
+	fileID := c.Param("file_id")
 
-	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), id, user.ID)
+	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -79,9 +79,9 @@ func (h *Handler) filesFindUser(c *gin.Context) {
 func (h *Handler) filesDownload(c *gin.Context) {
 	user := h.getUser(c)
 
-	id := c.Param("id")
+	fileID := c.Param("file_id")
 
-	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), id, user.ID)
+	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, user.ID)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -129,7 +129,7 @@ func (h *Handler) filesAddPermission(c *gin.Context) {
 func (h *Handler) filesDelete(c *gin.Context) {
 	user := h.getUser(c)
 
-	fileID := c.Param("id")
+	fileID := c.Param("file_id")
 
 	if err := h.services.File.Delete(c.Request.Context(), fileID, user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
@@ -163,4 +163,16 @@ func (h *Handler) filesDeletePermission(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
+}
+
+func (h *Handler) filesFindPermissionsToFile(c *gin.Context) {
+	fileID := c.Param("file_id")
+
+	permissions, err := h.services.File.FindPermissionsToFile(c.Request.Context(), fileID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": permissions})
 }

@@ -16,3 +16,8 @@ type DeleteFileReq struct {
 	Filename string `json:"filename"`
 	Path     string `json:"path"`
 }
+
+type Permission struct {
+	FileID string `json:"fileId"`
+	UserID string `json:"userId"`
+}

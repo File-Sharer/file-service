@@ -157,9 +157,9 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 }
 
 func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, error) {
-	file, err := s.repo.Redis.File.Find(ctx, FilePrefix(id))
+	fileCache, err := s.repo.Redis.File.Find(ctx, FilePrefix(id))
 	if err == nil {
-		return file, nil
+		return fileCache, nil
 	}
 
 	if err != redis.Nil {
@@ -176,6 +176,7 @@ func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, err
 		return nil, err
 	}
 
+	// Caching result
 	if err := s.repo.Redis.File.Create(ctx, FilePrefix(fileDB.ID), fileJSON,  time.Hour * 12); err != nil {
 		return nil, err
 	}
@@ -203,7 +204,8 @@ func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*mode
 		return nil, err
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, userFilesPrefix + userID, filesJSON, time.Hour * 12); err != nil {
+	// Caching result
+	if err := s.repo.Redis.File.Create(ctx, UserFilesPrefix(userID), filesJSON, time.Hour * 12); err != nil {
 		return nil, err
 	}
 
@@ -250,7 +252,11 @@ func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData
 		return err
 	}
 
+	// Clear cache
 	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(data.FileID, data.UserToAddID)); err != nil {
+		return err
+	}
+	if err := s.repo.Redis.File.Delete(ctx, FilePermissionsPrefix(data.FileID)); err != nil {
 		return err
 	}
 
@@ -338,9 +344,40 @@ func (s *FileService) DeletePermission(ctx context.Context, data *DeletePermissi
 	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(file.ID, data.UserToDeleteID)); err != nil {
 		return err
 	}
+	if err := s.repo.Redis.File.Delete(ctx, FilePermissionsPrefix(file.ID)); err != nil {
+		return err
+	}
 
 	err = s.repo.Postgres.File.DeletePermission(ctx, data.FileID, data.UserToDeleteID)
 	return err
+}
+
+func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID string) ([]*model.Permission, error) {
+	permissionsCache, err := s.repo.Redis.File.FindPermissions(ctx, FilePermissionsPrefix(fileID))
+	if err == nil {
+		return permissionsCache, nil
+	}
+
+	if err != redis.Nil {
+		return nil, err
+	}
+
+	permissionsDB, err := s.repo.Postgres.File.FindPermissionsToFile(ctx, fileID)
+	if err != nil {
+		return nil, err
+	}
+
+	permissionsJSON, err := json.Marshal(permissionsDB)
+	if err != nil {
+		return nil, err
+	}
+
+	// Caching result
+	if err := s.repo.Redis.File.Create(ctx, FilePermissionsPrefix(fileID), permissionsJSON, time.Hour * 2); err != nil {
+		return nil, err
+	}
+
+	return permissionsDB, nil
 }
 
 func (s *FileService) FilesDeleteConsumer() {

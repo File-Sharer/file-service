@@ -15,6 +15,7 @@ type File interface {
 	HasPermission(ctx context.Context, fileID string, userID string) (bool, error)
 	DeletePermission(ctx context.Context, fileID string, userID string) error
 	Delete(ctx context.Context, id string) error
+	FindPermissionsToFile(ctx context.Context, id string) ([]*model.Permission, error)
 }
 
 type PostgresRepository struct {

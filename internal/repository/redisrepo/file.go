@@ -24,31 +24,31 @@ func (r *FileRepo) Create(ctx context.Context, key string, value []byte, expiry 
 }
 
 func (r *FileRepo) Find(ctx context.Context, key string) (*model.File, error) {
-	file, err := r.rdb.Get(ctx, key).Result()
+	fileCache, err := r.rdb.Get(ctx, key).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	var fileDB model.File
-	if err := json.Unmarshal([]byte(file), &fileDB); err != nil {
+	var file model.File
+	if err := json.Unmarshal([]byte(fileCache), &file); err != nil {
 		return nil, err
 	}
 
-	return &fileDB, nil
+	return &file, nil
 }
 
 func (r *FileRepo) FindMany(ctx context.Context, key string) ([]*model.File, error) {
-	files, err := r.rdb.Get(ctx, key).Result()
+	filesCache, err := r.rdb.Get(ctx, key).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	var filesDB []*model.File
-	if err := json.Unmarshal([]byte(files), &filesDB); err != nil {
+	var files []*model.File
+	if err := json.Unmarshal([]byte(filesCache), &files); err != nil {
 		return nil, err
 	}
 
-	return filesDB, nil
+	return files, nil
 }
 
 func (r *FileRepo) HasPermission(ctx context.Context, key string) (bool, error) {
@@ -65,4 +65,18 @@ func (r *FileRepo) HasPermission(ctx context.Context, key string) (bool, error) 
 func (r *FileRepo) Delete(ctx context.Context, keys ...string) error {
 	err := r.rdb.Del(ctx, keys...).Err()
 	return err
+}
+
+func (r *FileRepo) FindPermissions(ctx context.Context, fileID string) ([]*model.Permission, error) {
+	permissionsCache, err := r.rdb.Get(ctx, fileID).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var permissions []*model.Permission
+	if err := json.Unmarshal([]byte(permissionsCache), &permissions); err != nil {
+		return nil, err
+	}
+
+	return permissions, nil
 }

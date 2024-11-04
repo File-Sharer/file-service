@@ -18,6 +18,7 @@ type File interface {
 	AddPermission(ctx context.Context, data *AddPermissionData) error
 	Delete(ctx context.Context, fileID string, user *model.User) error
 	DeletePermission(ctx context.Context, data *DeletePermissionData) error
+	FindPermissionsToFile(ctx context.Context, fileID string) ([]*model.Permission, error)
 	FilesDeleteConsumer()
 }
 

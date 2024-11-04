@@ -23,6 +23,7 @@ type File interface {
 	FindMany(ctx context.Context, key string) ([]*model.File, error)
 	HasPermission(ctx context.Context, key string) (bool, error)
 	Delete(ctx context.Context, keys ...string) error
+	FindPermissions(ctx context.Context, fileID string) ([]*model.Permission, error)
 }
 
 type RedisRepository struct {
