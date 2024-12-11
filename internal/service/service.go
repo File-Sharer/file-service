@@ -6,7 +6,6 @@ import (
 
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
-	"github.com/File-Sharer/file-service/internal/mq"
 	"github.com/File-Sharer/file-service/internal/repository"
 )
 
@@ -19,15 +18,14 @@ type File interface {
 	Delete(ctx context.Context, fileID string, user *model.User) error
 	DeletePermission(ctx context.Context, data *DeletePermissionData) error
 	FindPermissionsToFile(ctx context.Context, fileID string) ([]*model.Permission, error)
-	FilesDeleteConsumer()
 }
 
 type Service struct {
 	File
 }
 
-func New(repo *repository.Repository, rabbitMQ *mq.Conn, hasherClient pb.HasherClient) *Service {
+func New(repo *repository.Repository, hasherClient pb.HasherClient) *Service {
 	return &Service{
-		File: NewFileService(repo, rabbitMQ, hasherClient),
+		File: NewFileService(repo, hasherClient),
 	}
 }

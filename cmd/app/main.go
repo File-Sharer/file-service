@@ -10,7 +10,6 @@ import (
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/config"
 	"github.com/File-Sharer/file-service/internal/handler"
-	"github.com/File-Sharer/file-service/internal/mq"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/File-Sharer/file-service/internal/repository/postgres"
 	"github.com/File-Sharer/file-service/internal/server"
@@ -73,13 +72,8 @@ func main() {
 		}
 	}()
 
-	rabbitMQ, err := mq.New(os.Getenv("RABBITMQ_URL"))
-	if err != nil {
-		logrus.Fatalf("error opening rabbitMQ connection: %s", err.Error())
-	}
-
 	repo := repository.New(db, rdb)
-	services := service.New(repo, rabbitMQ, hasherClient)
+	services := service.New(repo, hasherClient)
 	handlers := handler.New(services, hasherClient)
 
 	srv := server.New()
@@ -95,8 +89,6 @@ func main() {
 			logrus.Fatalf("error running server: %s", err.Error())
 		}
 	}()
-
-	go services.File.FilesDeleteConsumer()
 
 	logrus.Println("File Server Started")
 
