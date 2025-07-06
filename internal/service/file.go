@@ -136,7 +136,7 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 		return file, nil
 	}
 
-	if file.IsPublic {
+	if file.Public {
 		return file, nil
 	}
 

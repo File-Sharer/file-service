@@ -32,7 +32,7 @@ func (h *Handler) filesCreate(c *gin.Context) {
 	}
 
 	fileObj.CreatorID = user.ID
-	fileObj.IsPublic = isPublic
+	fileObj.Public = isPublic
 	fileObj.DownloadFilename = downloadFilename
 
 	file, err := c.FormFile("file")
