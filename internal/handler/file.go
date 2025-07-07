@@ -1,10 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -35,13 +34,13 @@ func (h *Handler) filesCreate(c *gin.Context) {
 	fileObj.Public = isPublic
 	fileObj.DownloadFilename = downloadFilename
 
-	file, err := c.FormFile("file")
+	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "file is require"})
 		return
 	}
 
-	createdFile, err := h.services.File.Create(c.Request.Context(), &fileObj, file)
+	createdFile, err := h.services.File.Create(c.Request.Context(), &fileObj, file, fileHeader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -87,17 +86,30 @@ func (h *Handler) filesDownload(c *gin.Context) {
 		return
 	}
 
-	filePath := filepath.Join("files/" + file.CreatorID, file.Filename)
-
-	f, err := os.Open(filePath)
+	f, err := h.getFileDownload(file.URL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "file not found"})
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 	defer f.Close()
 
 	c.Header("filename", file.DownloadFilename)
 	io.Copy(c.Writer, f)
+}
+
+func (h *Handler) getFileDownload(url string) (io.ReadCloser, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file from storage: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("storage server responded with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return resp.Body, nil
 }
 
 func (h *Handler) filesAddPermission(c *gin.Context) {

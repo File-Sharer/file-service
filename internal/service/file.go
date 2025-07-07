@@ -1,17 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
@@ -19,54 +19,44 @@ import (
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 type FileService struct {
+	logger *zap.Logger
 	repo *repository.Repository
 	hasher pb.HasherClient
+	httpClient *http.Client
 }
 
-func NewFileService(repo *repository.Repository, hasherClient pb.HasherClient) *FileService {
+func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient) *FileService {
 	return &FileService{
+		logger: logger,
 		repo: repo,
 		hasher: hasherClient,
+		httpClient: &http.Client{},
 	}
 }
 
-func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *multipart.FileHeader) (*model.File, error) {
+func (s *FileService) Create(ctx context.Context, fileObj *model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
 	// Checking user creating files delay
 	delay := s.repo.Redis.Default.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
 	if delay.Err() != redis.Nil {
 		return nil, errWaitDelay
 	}
-
-	userFilesDir := "files/" + fileObj.CreatorID
-	if err := os.MkdirAll(userFilesDir, os.ModePerm); err != nil {
-		return nil, err
-	}
 	
-	if file.Size > MAX_FILE_SIZE {
+	if fileHeader.Size > MAX_FILE_SIZE {
 		return nil, errFileIsTooBig
-	}
-
-	// Checking user uploads size limit
-	userFilesDirSize, err := getDirSize(userFilesDir)
-	if err != nil {
-		return nil, err
-	}
-	if userFilesDirSize + file.Size >= MAX_USER_FILES_DIR_SIZE {
-		return nil, errMaxUploadsReached
 	}
 	
 	fileHashIDResp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
 	if !fileHashIDResp.GetOk() {
-		return nil, err
+		s.logger.Sugar().Errorf("failed to hash user(%s)'s file ID: %s", fileObj.CreatorID, err.Error())
+		return nil, errInternal
 	}
 	fileObj.ID = fileHashIDResp.GetHash()
 
-	ext := filepath.Ext(file.Filename)
-	filename := fileObj.ID + ext
-	fileObj.Filename = filename
+	ext := filepath.Ext(fileHeader.Filename)
 	fileObj.DateAdded = time.Now()
 
 	// Validating file extension
@@ -77,59 +67,98 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file *mul
 
 	// Sending user to timeout
 	if err := s.repo.Redis.Default.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2); err != nil {
-		return nil, err
+		s.logger.Sugar().Errorf("failed to set user(%s) to timeout in redis: %s", fileObj.CreatorID, err.Error())
+		return nil, errInternal
 	}
 
 	// Clear cache
 	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID)); err != nil {
-		return nil, err
+		s.logger.Sugar().Errorf("failed to clear user(%s) files cache in redis: %s", fileObj.CreatorID, err.Error())
+		return nil, errInternal
 	}
+
+	path := "files/" + fileObj.CreatorID
+	fileURL, err := s.saveToFileStorage(path, file, fileHeader)
+	if err != nil {
+		s.logger.Error(err.Error())
+		return nil, errFailedToUploadFileToFileStorage
+	}
+	fileObj.URL = fileURL
+	parts := strings.Split(fileURL, "/")
+	fileObj.Filename = parts[len(parts)-1]
 
 	if err := s.repo.Postgres.File.Create(ctx, fileObj); err != nil {
-		return nil, err
+		s.logger.Sugar().Errorf("failed to create file by user(%s) in postgres: %s", fileObj.CreatorID, err.Error())
+		return nil, errInternal
 	}
 
-	file.Filename = filename
-	err = saveFile(file, userFilesDir)
 	return fileObj, err
 }
 
-func getDirSize(dir string) (int64, error) {
-	var size int64
-	err := filepath.Walk(dir, func (path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
-}
+func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+	endpoint := "/files"
+	url := viper.GetString("fileStorage.origin") + endpoint
 
-func saveFile(file *multipart.FileHeader, dist string) error {
-	filePath := filepath.Join(dist, file.Filename)
-	createdFile, err := os.Create(filePath)
-	if err != nil {
-		return err
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+
+	// Writing text fields
+	if err := writer.WriteField("path", path); err != nil {
+		return "", fmt.Errorf("failed to write 'path' field for file-storage request: %s", err.Error())
 	}
-	defer createdFile.Close()
 
-	src, err := file.Open()
+	// Writing file
+	fileWriter, err := writer.CreateFormFile("file", fileHeader.Filename)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("failed to create file part for file-storage request: %s", err.Error())
 	}
-	defer src.Close()
 
-	_, err = io.Copy(createdFile, src)
-	return err
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to seek to the start of the file: %s", err.Error())
+	}
+
+	if _, err := io.Copy(fileWriter, file); err != nil {
+		return "", fmt.Errorf("failed to copy file content for file-storage request: %s", err.Error())
+	}
+
+	// End of request body
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("failed to close writer for file-storage request: %s", err.Error())
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, &requestBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file-storage request: %s", err.Error())
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to do file-storage request: %s", err.Error())
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body from file-storage: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var bodyJSON map[string]interface{}
+        if err := json.Unmarshal(body, &bodyJSON); err != nil {
+            return "", fmt.Errorf("failed to decode error response from file-storage: %s", err.Error())
+        }
+		return "", fmt.Errorf("ERROR from file-storage endpoint(%s), code(%d), details: %s", endpoint, resp.StatusCode, bodyJSON["details"])
+	}
+
+	return string(body), nil
 }
 
 func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error) {
 	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
-		return nil, err
+		return nil, errInternal
 	}
 
 	if file.CreatorID == userID {
@@ -318,12 +347,45 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID)); err != nil {
 		return err
 	}
-
-	return deleteFile(fmt.Sprintf("files/%s/%s", user.ID, file.Filename))
+	
+	return s.deleteFiles([]string{fmt.Sprintf("public/files/%s/%s", user.ID, file.Filename)})
 }
 
-func deleteFile(path string) error {
-	return os.Remove(path)
+func (s *FileService) deleteFiles(paths []string) error {
+	endpoint := "/files"
+	url := viper.GetString("fileStorage.origin") + endpoint
+
+	jsonBody, err := json.Marshal(paths)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON request body: %s", err.Error())
+	}
+	
+	req, err := http.NewRequest(http.MethodDelete, url, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create new HTTP request for file-storage: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do file-storage request: %s", err.Error())
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body from file-storage: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var bodyJSON map[string]interface{}
+        if err := json.Unmarshal(body, &bodyJSON); err != nil {
+            return fmt.Errorf("failed to decode error response from file-storage: %s", err.Error())
+        }
+		return fmt.Errorf("ERROR from file-storage endpoint(%s), code(%d), details: %s", endpoint, resp.StatusCode, bodyJSON["details"])
+	}
+
+	return nil
 }
 
 func (s *FileService) DeletePermission(ctx context.Context, data *DeletePermissionData) error {

@@ -16,13 +16,13 @@ func NewFileRepo(db *pgx.Conn) *FileRepo {
 }
 
 func (r *FileRepo) Create(ctx context.Context, file *model.File) error {
-	_, err := r.db.Exec(ctx, "insert into files(id, creator_id, public, filename, download_filename) values($1, $2, $3, $4, $5)", file.ID, file.CreatorID, file.Public, file.Filename, file.DownloadFilename)
+	_, err := r.db.Exec(ctx, "insert into files(id, creator_id, url, public, filename, download_filename) values($1, $2, $3, $4, $5, $6)", file.ID, file.CreatorID, file.URL, file.Public, file.Filename, file.DownloadFilename)
 	return err
 }
 
 func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var file model.File
-	if err := r.db.QueryRow(ctx, "select id, creator_id, public, filename, download_filename, date_added from files where id = $1", id).Scan(&file.ID, &file.CreatorID, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
+	if err := r.db.QueryRow(ctx, "select id, creator_id, url, public, filename, download_filename, date_added from files where id = $1", id).Scan(&file.ID, &file.CreatorID, &file.URL, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
 		return nil, err
 	}
 
@@ -30,7 +30,7 @@ func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error)
 }
 
 func (r *FileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
-	rows, err := r.db.Query(ctx, "select id, creator_id, public, filename, download_filename, date_added from files where creator_id = $1", userID)
+	rows, err := r.db.Query(ctx, "select id, creator_id, url, public, filename, download_filename, date_added from files where creator_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (r *FileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.F
 	var files []*model.File
 	for rows.Next() {
 		var file model.File
-		if err := rows.Scan(&file.ID, &file.CreatorID, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil {
+		if err := rows.Scan(&file.ID, &file.CreatorID, &file.URL, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil {
 			return nil, err
 		}
 

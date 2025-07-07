@@ -2,6 +2,9 @@ app:
   host: "localhost"
   port: "9000"
 
+fileStorage:
+  origin: "http://localhost:5050"
+
 hasherService:
   host: "localhost:8090"
 
