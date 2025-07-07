@@ -3,6 +3,7 @@ package service
 import "errors"
 
 var (
+	errFileNotFound = errors.New("file not found")
 	errInternal = errors.New("internal server error")
 	errNoAccess = errors.New("you have no access")
 	errFileIsTooBig = errors.New("file is too big, max upload size: 256MB")

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"strings"
 
@@ -17,12 +18,14 @@ import (
 type Handler struct {
 	services *service.Service
 	hasherClient pb.HasherClient
+	httpClient *http.Client
 }
 
 func New(services *service.Service, hasherClient pb.HasherClient) *Handler {
 	return &Handler{
 		services: services,
 		hasherClient: hasherClient,
+		httpClient: &http.Client{},
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/repository"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -130,8 +132,8 @@ func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHe
 	if err != nil {
 		return "", fmt.Errorf("failed to create file-storage request: %s", err.Error())
 	}
-
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Internal-Token", os.Getenv("X_INTERNAL_TOKEN"))
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -331,24 +333,35 @@ func checkUserExistence(token string, userID string) error {
 }
 
 func (s *FileService) Delete(ctx context.Context, fileID string, user *model.User) error {
-	file, err := s.FindByID(ctx, fileID)
+	file, err := s.ProtectedFindByID(ctx, fileID, user.ID)
 	if err != nil {
-		return err
+		if err == pgx.ErrNoRows {
+			return errFileNotFound
+		}
+		s.logger.Sugar().Errorf("failed to find file(%s) in postgres: %s", fileID, err.Error())
+		return errInternal
 	}
 
 	if file.CreatorID != user.ID && user.Role != "ADMIN" {
 		return errNoAccess
 	}
+	
+	if err := s.deleteFiles([]string{fmt.Sprintf("public/files/%s/%s", user.ID, file.Filename)}); err != nil {
+		s.logger.Error(err.Error())
+		return errInternal
+	}
 
 	if err := s.repo.Postgres.File.Delete(ctx, fileID); err != nil {
-		return err
+		s.logger.Sugar().Errorf("failed to delete file(%s) from postgres: %s", fileID, err.Error())
+		return errInternal
 	}
 
 	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID)); err != nil {
-		return err
+		s.logger.Sugar().Errorf("failed to delete file(%s) from redis: %s", fileID, err.Error())
+		return errInternal
 	}
-	
-	return s.deleteFiles([]string{fmt.Sprintf("public/files/%s/%s", user.ID, file.Filename)})
+
+	return nil
 }
 
 func (s *FileService) deleteFiles(paths []string) error {
@@ -365,6 +378,7 @@ func (s *FileService) deleteFiles(paths []string) error {
 		return fmt.Errorf("failed to create new HTTP request for file-storage: %s", err.Error())
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", os.Getenv("X_INTERNAL_TOKEN"))
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

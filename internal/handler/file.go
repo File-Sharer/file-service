@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -98,7 +99,13 @@ func (h *Handler) filesDownload(c *gin.Context) {
 }
 
 func (h *Handler) getFileDownload(url string) (io.ReadCloser, error) {
-	resp, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new request to file-storage: %s", err.Error())
+	}
+	req.Header.Set("X-Internal-Token", os.Getenv("X_INTERNAL_TOKEN"))
+
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file from storage: %s", err.Error())
 	}
