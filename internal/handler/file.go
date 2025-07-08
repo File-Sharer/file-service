@@ -185,13 +185,28 @@ func (h *Handler) filesDeletePermission(c *gin.Context) {
 }
 
 func (h *Handler) filesFindPermissionsToFile(c *gin.Context) {
+	user := h.getUser(c)
+
 	fileID := c.Param("file_id")
 
-	permissions, err := h.services.File.FindPermissionsToFile(c.Request.Context(), fileID)
+	permissions, err := h.services.File.FindPermissionsToFile(c.Request.Context(), fileID, user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": permissions})
+}
+
+func (h *Handler) filesTogglePublic(c *gin.Context) {
+	user := h.getUser(c)
+
+	fileID := c.Param("file_id")
+
+	if err := h.services.File.TogglePublic(c.Request.Context(), fileID, user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
 }

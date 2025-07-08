@@ -424,7 +424,7 @@ func (s *FileService) DeletePermission(ctx context.Context, data *DeletePermissi
 	return err
 }
 
-func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID string) ([]*model.Permission, error) {
+func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error) {
 	permissionsCache, err := s.repo.Redis.File.FindPermissions(ctx, FilePermissionsPrefix(fileID))
 	if err == nil {
 		return permissionsCache, nil
@@ -434,8 +434,8 @@ func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID string) 
 		return nil, err
 	}
 
-	permissionsDB, err := s.repo.Postgres.File.FindPermissionsToFile(ctx, fileID)
-	if err != nil {
+	permissionsDB, err := s.repo.Postgres.File.FindPermissionsToFile(ctx, fileID, creatorID)
+	if err != nil && err != pgx.ErrNoRows {
 		return nil, err
 	}
 
@@ -450,4 +450,29 @@ func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID string) 
 	}
 
 	return permissionsDB, nil
+}
+
+func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) error {
+	file, err := s.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.Postgres.File.TogglePublic(ctx, id, creatorID); err != nil {
+		s.logger.Sugar().Errorf("failed to toggle file(%s) public field value in postgres: %s", id, err.Error())
+		return errInternal
+	}
+
+	if !file.Public {
+		if err := s.repo.Postgres.File.ClearPermissions(ctx, id, creatorID); err != nil {
+			s.logger.Sugar().Errorf("failed to clear file(%s) permissions in postgres: %s", id, err.Error())
+			return errInternal
+		}
+	}
+
+	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(id), UserFilesPrefix(creatorID)); err != nil {
+		s.logger.Sugar().Errorf("failed to clear redis cache(file: %s): %s", id, err.Error())
+	}
+
+	return nil
 }

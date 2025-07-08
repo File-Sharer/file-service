@@ -18,7 +18,8 @@ type File interface {
 	AddPermission(ctx context.Context, data *AddPermissionData) error
 	Delete(ctx context.Context, fileID string, user *model.User) error
 	DeletePermission(ctx context.Context, data *DeletePermissionData) error
-	FindPermissionsToFile(ctx context.Context, fileID string) ([]*model.Permission, error)
+	FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error)
+	TogglePublic(ctx context.Context, id, creatorID string) error
 }
 
 type Service struct {

@@ -77,8 +77,8 @@ func (r *FileRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id string) ([]*model.Permission, error) {
-	rows, err := r.db.Query(ctx, "select file_id, user_id from permissions where file_id = $1", id)
+func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID string) ([]*model.Permission, error) {
+	rows, err := r.db.Query(ctx, "select p.file_id, p.user_id from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where file_id = $1", id, creatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -99,4 +99,14 @@ func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id string) ([]*mod
 	}
 
 	return permissions, nil
+}
+
+func (r *FileRepo) TogglePublic(ctx context.Context, id, creatorID string) error {
+	_, err := r.db.Exec(ctx, "update files set public = not public where id = $1 and creator_id = $2", id, creatorID)
+	return err
+}
+
+func (r *FileRepo) ClearPermissions(ctx context.Context, id, creatorID string) error {
+	_, err := r.db.Exec(ctx, "delete from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where p.file_id = $1", id, creatorID)
+	return err
 }

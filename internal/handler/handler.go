@@ -44,15 +44,17 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	api := router.Group("/api")
 	{
 		files := api.Group("/files")
+		files.Use(h.mwAuth)
 		{
-			files.POST("", h.mwAuth, h.filesCreate)
-			files.GET("/:file_id", h.mwAuth, h.filesGet)
-			files.GET("", h.mwAuth, h.filesFindUser)
-			files.GET("/:file_id/dl", h.mwAuth, h.filesDownload)
-			files.PUT("/:file_id/:user_id", h.mwAuth, h.filesAddPermission)
-			files.DELETE("/:file_id", h.mwAuth, h.filesDelete)
-			files.DELETE("/:file_id/permission", h.mwAuth, h.filesDeletePermission)
-			files.GET("/:file_id/permissions", h.mwAuth, h.filesFindPermissionsToFile)
+			files.POST("", h.filesCreate)
+			files.GET("/:file_id", h.filesGet)
+			files.GET("", h.filesFindUser)
+			files.GET("/:file_id/dl", h.filesDownload)
+			files.PUT("/:file_id/:user_id", h.filesAddPermission)
+			files.DELETE("/:file_id", h.filesDelete)
+			files.DELETE("/:file_id/permission", h.filesDeletePermission)
+			files.GET("/:file_id/permissions", h.filesFindPermissionsToFile)
+			files.PATCH("/:file_id/togglepub", h.filesTogglePublic)
 		}
 	}
 
