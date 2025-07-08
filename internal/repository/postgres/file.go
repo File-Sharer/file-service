@@ -107,6 +107,6 @@ func (r *FileRepo) TogglePublic(ctx context.Context, id, creatorID string) error
 }
 
 func (r *FileRepo) ClearPermissions(ctx context.Context, id, creatorID string) error {
-	_, err := r.db.Exec(ctx, "delete from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where p.file_id = $1", id, creatorID)
+	_, err := r.db.Exec(ctx, "delete from permissions p using files f where p.file_id = $1 and f.id = p.file_id and f.creator_id = $2", id, creatorID)
 	return err
 }
