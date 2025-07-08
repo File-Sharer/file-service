@@ -470,7 +470,7 @@ func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) er
 		}
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(id), UserFilesPrefix(creatorID)); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(id), UserFilesPrefix(creatorID), FilePermissionsPrefix(id)); err != nil {
 		s.logger.Sugar().Errorf("failed to clear redis cache(file: %s): %s", id, err.Error())
 	}
 
