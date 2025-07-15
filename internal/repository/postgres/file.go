@@ -78,7 +78,7 @@ func (r *FileRepo) Delete(ctx context.Context, id string) error {
 }
 
 func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID string) ([]*model.Permission, error) {
-	rows, err := r.db.Query(ctx, "select p.file_id, p.user_id from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where file_id = $1", id, creatorID)
+	rows, err := r.db.Query(ctx, "select p.file_id, p.user_id from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where p.file_id = $1", id, creatorID)
 	if err != nil {
 		return nil, err
 	}

@@ -158,24 +158,16 @@ func (h *Handler) filesDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
 }
 
-type deletePermissionReq struct {
-	UserToDeletePermissionID string `json:"userToDelete" binding:"required"`
-}
-
 func (h *Handler) filesDeletePermission(c *gin.Context) {
 	user := h.getUser(c)
 
 	fileID := c.Param("file_id")
-	var req deletePermissionReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": err.Error()})
-		return
-	}
+	userToDeleteID := c.Param("user_id")
 
 	if err := h.services.File.DeletePermission(c.Request.Context(), &service.DeletePermissionData{
 		FileID: fileID,
 		UserID: user.ID,
-		UserToDeleteID: req.UserToDeletePermissionID,
+		UserToDeleteID: userToDeleteID,
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return

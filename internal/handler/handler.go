@@ -52,7 +52,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			files.GET("/:file_id/dl", h.filesDownload)
 			files.PUT("/:file_id/:user_id", h.filesAddPermission)
 			files.DELETE("/:file_id", h.filesDelete)
-			files.DELETE("/:file_id/permission", h.filesDeletePermission)
+			files.DELETE("/:file_id/:user_id", h.filesDeletePermission)
 			files.GET("/:file_id/permissions", h.filesFindPermissionsToFile)
 			files.PATCH("/:file_id/togglepub", h.filesTogglePublic)
 		}
