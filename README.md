@@ -1,2 +1,21 @@
 # file-service
-Microservice for sharing files
+
+## API Docs
+`/api` - base route
+
+**Headers**:
+- **`Authorization`**: Bearer `<ACCESS_TOKEN>`
+
+**Designations**:
+- **`[AUTH]`** - ***requires** auth*
+
+**`[AUTH]`** `/files`:
+- **POST** -> `/` - *create a file*
+- **GET** -> `/:<file_id>` - *get file by ID*
+- **GET** -> `/` - *get your own files*
+- **GET** -> `/:<file_id>/dl` - *download file*
+- **PUT** -> `/:<file_id>/:<user_id>` - *add permission to file*
+- **DELETE** -> `/:<file_id>` - *delete file*
+- **DELETE** -> `/:<file_id>/:<user_id>` - *delete permission*
+- **GET** -> `/:<file_id>/permissions` - *get permissions to your file*
+- *PATCH* -> `/:<file_id>/togglepub` - *toggle file visibility*
