@@ -6,9 +6,15 @@ import (
 
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
+	"github.com/File-Sharer/file-service/internal/rabbitmq"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"go.uber.org/zap"
 )
+
+type UserSpace interface {
+	FindUserSpace(ctx context.Context, userID string) (int64, error)
+	StartCreatingUsersSpaces(ctx context.Context)
+}
 
 type File interface {
 	Create(ctx context.Context, fileObj *model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error)
@@ -23,11 +29,20 @@ type File interface {
 }
 
 type Service struct {
+	logger *zap.Logger
+	UserSpace
 	File
 }
 
-func New(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient) *Service {
+func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, hasherClient pb.HasherClient) *Service {
 	return &Service{
+		logger: logger,
+		UserSpace: newUserSpaceService(logger, repo, rabbitmq),
 		File: NewFileService(logger, repo, hasherClient),
 	}
+}
+
+func (s *Service) StartAllWorkers(ctx context.Context) {
+	go s.UserSpace.StartCreatingUsersSpaces(ctx)
+	s.logger.Info("Started all workers")
 }

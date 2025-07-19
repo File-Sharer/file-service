@@ -10,6 +10,7 @@ import (
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/config"
 	"github.com/File-Sharer/file-service/internal/handler"
+	"github.com/File-Sharer/file-service/internal/rabbitmq"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/File-Sharer/file-service/internal/repository/postgres"
 	"github.com/File-Sharer/file-service/internal/server"
@@ -53,14 +54,12 @@ func main() {
 		DBName: os.Getenv("DB_NAME"),
 		SSLMode: os.Getenv("DB_SSLMODE"),
 	}
-	db, err := postgres.NewPostgresDB(context.Background(), dbConfig)
+	db, err := postgres.NewPgPool(context.Background(), dbConfig)
 	if err != nil {
 		logger.Sugar().Fatalf("error connecting to postgresql: %s", err.Error())
 	}
 	defer func ()  {
-		if err := db.Close(context.Background()); err != nil {
-			logger.Sugar().Fatalf("error occured on postgresql connection close: %s", err.Error())
-		}
+		db.Close()
 	}()
 
 	rdb := redis.NewClient(&redis.Options{
@@ -72,9 +71,16 @@ func main() {
 		}
 	}()
 
+	rabbitmq, err := rabbitmq.New(os.Getenv("RABBITMQ_URI"))
+	if err != nil {
+		logger.Sugar().Fatalf("error connection to rabbitmq: %s", err.Error())
+	}
+
 	repo := repository.New(db, rdb)
-	services := service.New(logger, repo, hasherClient)
+	services := service.New(logger, repo, rabbitmq, hasherClient)
 	handlers := handler.New(services, hasherClient)
+
+	services.StartAllWorkers(context.Background())
 
 	srv := server.New()
 	serverConfig := &config.ServerConfig{

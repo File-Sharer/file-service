@@ -4,8 +4,13 @@ import (
 	"context"
 
 	"github.com/File-Sharer/file-service/internal/model"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type UserSpace interface {
+	Create(ctx context.Context, d model.UserSpace) error
+	Find(ctx context.Context, userID string) (int64, error)
+}
 
 type File interface {
 	Create(ctx context.Context, file *model.File) error
@@ -21,11 +26,13 @@ type File interface {
 }
 
 type PostgresRepository struct {
+	UserSpace
 	File
 }
 
-func NewPostgresRepo(db *pgx.Conn) *PostgresRepository {
+func NewPostgresRepo(db *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{
+		UserSpace: newUserSpaceRepo(db),
 		File: NewFileRepo(db),
 	}
 }

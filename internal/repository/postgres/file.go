@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/File-Sharer/file-service/internal/model"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type FileRepo struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 }
 
-func NewFileRepo(db *pgx.Conn) *FileRepo {
+func NewFileRepo(db *pgxpool.Pool) *FileRepo {
 	return &FileRepo{db: db}
 }
 
