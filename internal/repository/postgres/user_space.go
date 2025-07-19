@@ -34,3 +34,16 @@ func (r *userSpaceRepo) Find(ctx context.Context, userID string) (int64, error) 
 
 	return space, nil
 }
+
+func (r *userSpaceRepo) GetSize(ctx context.Context, userID string) (int64, error) {
+	var size int64
+	if err := r.db.QueryRow(
+		ctx,
+		"select sum(size) from files where creator_id = $1",
+		userID,
+	).Scan(&size); err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}

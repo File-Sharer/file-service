@@ -8,7 +8,7 @@ var (
 	userFilesPrefix = "user-files:%s" // user-files:<userID>
 	fileCreateDelayPrefix = "file-creating-delay-for:%s" // file-creating-delay-for:<userID>
 	filePermissionsPrefix = "permissions-to:%s" // permissions-to:<fileID>
-	userSpacePrefix = "user-space:%s" // <userID>
+	spaceSizePrefix = "space-size:%s" // <userID>
 )
 
 func FilePrefix(fileID string) string {
@@ -31,6 +31,6 @@ func FilePermissionsPrefix(fileID string) string {
 	return fmt.Sprintf(filePermissionsPrefix, fileID)
 }
 
-func UserSpacePrefix(userID string) string {
-	return fmt.Sprintf(userSpacePrefix, userID)
+func SpaceSizePrefix(userID string) string {
+	return fmt.Sprintf(spaceSizePrefix, userID)
 }

@@ -5,6 +5,7 @@ import "time"
 type File struct {
 	ID                string    `json:"id"`
 	CreatorID         string    `json:"creatorId"`
+	Size              int64     `json:"size"`
 	URL               string    `json:"url"`
 	Public            bool      `json:"public"`
 	Filename          string    `json:"filename"`

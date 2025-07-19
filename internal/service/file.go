@@ -80,11 +80,12 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 	}
 
 	path := "files/" + fileObj.CreatorID
-	fileURL, err := s.saveToFileStorage(path, file, fileHeader)
+	fileSize, fileURL, err := s.saveToFileStorage(path, file, fileHeader)
 	if err != nil {
 		s.logger.Error(err.Error())
 		return nil, errFailedToUploadFileToFileStorage
 	}
+	fileObj.Size = fileSize
 	fileObj.URL = fileURL
 	parts := strings.Split(fileURL, "/")
 	fileObj.Filename = parts[len(parts)-1]
@@ -97,7 +98,7 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 	return fileObj, err
 }
 
-func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (int64, string, error) {
 	endpoint := "/files"
 	url := viper.GetString("fileStorage.origin") + endpoint
 
@@ -106,55 +107,66 @@ func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHe
 
 	// Writing text fields
 	if err := writer.WriteField("path", path); err != nil {
-		return "", fmt.Errorf("failed to write 'path' field for file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to write 'path' field for file-storage request: %s", err.Error())
 	}
 
 	// Writing file
 	fileWriter, err := writer.CreateFormFile("file", fileHeader.Filename)
 	if err != nil {
-		return "", fmt.Errorf("failed to create file part for file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to create file part for file-storage request: %s", err.Error())
 	}
 
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return "", fmt.Errorf("failed to seek to the start of the file: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to seek to the start of the file: %s", err.Error())
 	}
 
 	if _, err := io.Copy(fileWriter, file); err != nil {
-		return "", fmt.Errorf("failed to copy file content for file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to copy file content for file-storage request: %s", err.Error())
 	}
 
 	// End of request body
 	if err := writer.Close(); err != nil {
-		return "", fmt.Errorf("failed to close writer for file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to close writer for file-storage request: %s", err.Error())
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, &requestBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to create file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to create file-storage request: %s", err.Error())
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-Internal-Token", os.Getenv("X_INTERNAL_TOKEN"))
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to do file-storage request: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to do file-storage request: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body from file-storage: %s", err.Error())
+		return 0, "", fmt.Errorf("failed to read response body from file-storage: %s", err.Error())
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		var bodyJSON map[string]interface{}
         if err := json.Unmarshal(body, &bodyJSON); err != nil {
-            return "", fmt.Errorf("failed to decode error response from file-storage: %s", err.Error())
+            return 0, "", fmt.Errorf("failed to decode error response from file-storage: %s", err.Error())
         }
-		return "", fmt.Errorf("ERROR from file-storage endpoint(%s), code(%d), details: %s", endpoint, resp.StatusCode, bodyJSON["details"])
+		return 0, "", fmt.Errorf("ERROR from file-storage endpoint(%s), code(%d), details: %s", endpoint, resp.StatusCode, bodyJSON["details"])
 	}
 
-	return string(body), nil
+	var response uploadResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return 0, "", fmt.Errorf("failed to unmarshal json response from file-storage: %s", err.Error())
+	}
+
+	return response.FileSize, response.URL, nil
+}
+
+type uploadResponse struct {
+	Ok       bool   `json:"ok"`
+	URL      string `json:"url"`
+	FileSize int64  `json:"file_size"`
 }
 
 func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error) {

@@ -26,28 +26,28 @@ func newUserSpaceService(logger *zap.Logger, repo *repository.Repository, rabbit
 	}
 }
 
-func (s *userSpaceService) FindUserSpace(ctx context.Context, userID string) (int64, error) {
-	spaceCache, err := s.repo.Redis.Default.Get(ctx, UserSpacePrefix(userID)).Int64()
+func (s *userSpaceService) GetSize(ctx context.Context, userID string) (int64, error) {
+	spaceSizeCache, err := s.repo.Redis.Default.Get(ctx, SpaceSizePrefix(userID)).Int64()
 	if err == nil {
-		return spaceCache, nil
+		return spaceSizeCache, nil
 	}
 	if err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get user(%s) space from redis: %s", userID, err.Error())
+		s.logger.Sugar().Errorf("failed to get user(%s) space size from redis: %s", userID, err.Error())
 		return 0, errInternal
 	}
 
-	space, err := s.repo.Postgres.UserSpace.Find(ctx, userID)
+	spaceSize, err := s.repo.Postgres.UserSpace.GetSize(ctx, userID)
 	if err != nil {
-		s.logger.Sugar().Errorf("failed to find user(%s) space in postgres: %s", userID, err.Error())
+		s.logger.Sugar().Errorf("failed to get user(%s) space size from postgres: %s", userID, err.Error())
 		return 0, errInternal
 	}
 
-	if err := s.repo.Redis.Default.Set(ctx, UserSpacePrefix(userID), space, time.Minute * 5); err != nil {
-		s.logger.Sugar().Errorf("failed to set user(%s) space in redis: %s", userID, err.Error())
+	if err := s.repo.Redis.Default.Set(ctx, SpaceSizePrefix(userID), spaceSize, time.Minute * 5); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s) space size in redis: %s", userID, err.Error())
 		return 0, errInternal
 	}
 
-	return space, nil
+	return spaceSize, nil
 }
 
 type userCreated struct {
@@ -68,7 +68,7 @@ func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {
 			continue
 		}
 
-		if err := s.repo.Postgres.UserSpace.Create(ctx, model.UserSpace{UserID: data.UserID, Space: 0}); err != nil {
+		if err := s.repo.Postgres.UserSpace.Create(ctx, model.UserSpace{UserID: data.UserID}); err != nil {
 			s.logger.Sugar().Errorf("failed to create user(%s) space in postgres: %s", data.UserID, err.Error())
 			msg.Nack(false, true)
 			continue

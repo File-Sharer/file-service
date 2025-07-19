@@ -12,7 +12,7 @@ import (
 )
 
 type UserSpace interface {
-	FindUserSpace(ctx context.Context, userID string) (int64, error)
+	GetSize(ctx context.Context, userID string) (int64, error)
 	StartCreatingUsersSpaces(ctx context.Context)
 }
 

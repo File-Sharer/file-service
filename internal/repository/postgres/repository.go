@@ -9,7 +9,7 @@ import (
 
 type UserSpace interface {
 	Create(ctx context.Context, d model.UserSpace) error
-	Find(ctx context.Context, userID string) (int64, error)
+	GetSize(ctx context.Context, userID string) (int64, error)
 }
 
 type File interface {
