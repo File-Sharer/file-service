@@ -79,8 +79,7 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 		return nil, errInternal
 	}
 
-	path := "files/" + fileObj.CreatorID
-	fileSize, fileURL, err := s.saveToFileStorage(path, file, fileHeader)
+	fileSize, fileURL, err := s.saveToFileStorage(fileObj.CreatorID, file, fileHeader)
 	if err != nil {
 		s.logger.Error(err.Error())
 		return nil, errFailedToUploadFileToFileStorage
@@ -358,7 +357,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return errNoAccess
 	}
 	
-	if err := s.deleteFiles([]string{fmt.Sprintf("public/files/%s/%s", user.ID, file.Filename)}); err != nil {
+	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", user.ID, file.Filename)}); err != nil {
 		s.logger.Error(err.Error())
 		return errInternal
 	}
