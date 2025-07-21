@@ -11,4 +11,5 @@ var (
 	errWaitDelay = errors.New("please wait until the timeout is over, it is 2 mins for creating files")
 	errCantAddPermissionForYourself = errors.New("you cannot add permission to your file for yourself")
 	errFailedToUploadFileToFileStorage = errors.New("failed to upload file to file storage")
+	errYouDontHaveEnoughSpace = errors.New("you don't have enough space")
 )

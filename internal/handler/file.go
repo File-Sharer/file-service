@@ -41,7 +41,7 @@ func (h *Handler) filesCreate(c *gin.Context) {
 		return
 	}
 
-	createdFile, err := h.services.File.Create(c.Request.Context(), &fileObj, file, fileHeader)
+	createdFile, err := h.services.File.Create(c.Request.Context(), fileObj, file, fileHeader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -131,7 +131,7 @@ func (h *Handler) filesAddPermission(c *gin.Context) {
 		return
 	}
 	
-	data := &service.AddPermissionData{
+	data := service.AddPermissionData{
 		UserToken: userToken,
 		FileID: fileID,
 		UserID: user.ID,
@@ -150,7 +150,7 @@ func (h *Handler) filesDelete(c *gin.Context) {
 
 	fileID := c.Param("file_id")
 
-	if err := h.services.File.Delete(c.Request.Context(), fileID, user); err != nil {
+	if err := h.services.File.Delete(c.Request.Context(), fileID, *user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
@@ -164,7 +164,7 @@ func (h *Handler) filesDeletePermission(c *gin.Context) {
 	fileID := c.Param("file_id")
 	userToDeleteID := c.Param("user_id")
 
-	if err := h.services.File.DeletePermission(c.Request.Context(), &service.DeletePermissionData{
+	if err := h.services.File.DeletePermission(c.Request.Context(), service.DeletePermissionData{
 		FileID: fileID,
 		UserID: user.ID,
 		UserToDeleteID: userToDeleteID,

@@ -29,18 +29,20 @@ type FileService struct {
 	repo *repository.Repository
 	hasher pb.HasherClient
 	httpClient *http.Client
+	userSpaceService UserSpace
 }
 
-func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient) *FileService {
+func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient, userSpaceService UserSpace) *FileService {
 	return &FileService{
 		logger: logger,
 		repo: repo,
 		hasher: hasherClient,
 		httpClient: &http.Client{},
+		userSpaceService: userSpaceService,
 	}
 }
 
-func (s *FileService) Create(ctx context.Context, fileObj *model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
+func (s *FileService) Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
 	// Checking user creating files delay
 	delay := s.repo.Redis.Default.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
 	if delay.Err() != redis.Nil {
@@ -49,6 +51,14 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 	
 	if fileHeader.Size > MAX_FILE_SIZE {
 		return nil, errFileIsTooBig
+	}
+
+	spaceSize, err := s.userSpaceService.GetSize(ctx, fileObj.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	if spaceSize + fileHeader.Size > MAX_SPACE_SIZE {
+		return nil, errYouDontHaveEnoughSpace
 	}
 	
 	fileHashIDResp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
@@ -74,7 +84,7 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 	}
 
 	// Clear cache
-	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID)); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)); err != nil {
 		s.logger.Sugar().Errorf("failed to clear user(%s) files cache in redis: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
@@ -89,12 +99,12 @@ func (s *FileService) Create(ctx context.Context, fileObj *model.File, file mult
 	parts := strings.Split(fileURL, "/")
 	fileObj.Filename = parts[len(parts)-1]
 
-	if err := s.repo.Postgres.File.Create(ctx, fileObj); err != nil {
+	if err := s.repo.Postgres.File.Create(ctx, &fileObj); err != nil {
 		s.logger.Sugar().Errorf("failed to create file by user(%s) in postgres: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
 
-	return fileObj, err
+	return &fileObj, err
 }
 
 func (s *FileService) saveToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (int64, string, error) {
@@ -272,7 +282,7 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 	return hasPermissionDB, nil
 }
 
-func (s *FileService) AddPermission(ctx context.Context, data *AddPermissionData) error {
+func (s *FileService) AddPermission(ctx context.Context, data AddPermissionData) error {
 	file, err := s.FindByID(ctx, data.FileID)
 	if err != nil {
 		return err
@@ -343,7 +353,7 @@ func checkUserExistence(token string, userID string) error {
 	return nil
 }
 
-func (s *FileService) Delete(ctx context.Context, fileID string, user *model.User) error {
+func (s *FileService) Delete(ctx context.Context, fileID string, user model.User) error {
 	file, err := s.ProtectedFindByID(ctx, fileID, user.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -367,7 +377,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user *model.Use
 		return errInternal
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID)); err != nil {
+	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID), SpaceSizePrefix(user.ID)); err != nil {
 		s.logger.Sugar().Errorf("failed to delete file(%s) from redis: %s", fileID, err.Error())
 		return errInternal
 	}
@@ -413,7 +423,7 @@ func (s *FileService) deleteFiles(paths []string) error {
 	return nil
 }
 
-func (s *FileService) DeletePermission(ctx context.Context, data *DeletePermissionData) error {
+func (s *FileService) DeletePermission(ctx context.Context, data DeletePermissionData) error {
 	file, err := s.FindByID(ctx, data.FileID)
 	if err != nil {
 		return err
