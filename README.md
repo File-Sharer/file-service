@@ -8,6 +8,10 @@
 
 **Designations**:
 - **`[AUTH]`** - ***requires** auth*
+- **`[X_INTERNAL_TOKEN]`** - ***requires** internal token*
+
+**`[X_INTERNAL_TOKEN]`** `/users-spaces`:
+- **PATCH** -> `/level` - *update user space level*
 
 **`[AUTH]`** `/files`:
 - **POST** -> `/` - *create a file*
