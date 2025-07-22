@@ -6,7 +6,7 @@ type level struct {
 }
 
 var (
-	levelSpace = map[uint8]level{
+	levelSpaceSizes = map[uint8]level{
 		1: level{
 			maxFileSize: 1_073_741_824, // 1 GB in bytes
 			maxSpaceSize: 8_589_934_592, // 8 GB in bytes

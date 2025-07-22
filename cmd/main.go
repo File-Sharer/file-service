@@ -76,8 +76,8 @@ func main() {
 		logger.Sugar().Fatalf("error connection to rabbitmq: %s", err.Error())
 	}
 
-	repo := repository.New(db, rdb)
-	services := service.New(logger, repo, rabbitmq, hasherClient)
+	repo := repository.New(db)
+	services := service.New(logger, repo, rabbitmq, hasherClient, rdb)
 	handlers := handler.New(services, hasherClient)
 
 	services.StartAllWorkers(context.Background())
