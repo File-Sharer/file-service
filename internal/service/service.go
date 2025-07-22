@@ -16,6 +16,7 @@ type UserSpace interface {
 	Get(ctx context.Context, userID string) (*model.UserSpace, error)
 	GetSize(ctx context.Context, userID string) (int64, error)
 	StartCreatingUsersSpaces(ctx context.Context)
+	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
 }
 
 type File interface {

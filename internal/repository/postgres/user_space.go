@@ -26,9 +26,9 @@ func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpac
 	var userSpace model.UserSpace
 	if err := r.db.QueryRow(
 		ctx,
-		"select sub_level from users_spaces where user_id = $1",
+		"select level from users_spaces where user_id = $1",
 		userID,
-	).Scan(&userSpace.SubLevel); err != nil {
+	).Scan(&userSpace.Level); err != nil {
 		return nil, err
 	}
 
@@ -47,4 +47,9 @@ func (r *userSpaceRepo) GetSize(ctx context.Context, userID string) (int64, erro
 	}
 
 	return size, nil
+}
+
+func (r *userSpaceRepo) UpdateLevel(ctx context.Context, userID string, newLevel uint8) error {
+	_, err := r.db.Exec(ctx, "update users_spaces set level = $1 where user_id = $2", newLevel, userID)
+	return err
 }

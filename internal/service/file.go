@@ -57,15 +57,15 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		return nil, err
 	}
 	
-	if fileHeader.Size > levelSpaceSizes[userSpace.SubLevel].maxFileSize {
+	if fileHeader.Size > levelSpaceSizes[userSpace.Level].maxFileSize {
 		return nil, errFileIsTooBig
 	}
-
+	
 	spaceSize, err := s.userSpaceService.GetSize(ctx, fileObj.CreatorID)
 	if err != nil {
 		return nil, err
 	}
-	if spaceSize + fileHeader.Size > levelSpaceSizes[userSpace.SubLevel].maxSpaceSize {
+	if spaceSize + fileHeader.Size > levelSpaceSizes[userSpace.Level].maxSpaceSize {
 		return nil, errYouDontHaveEnoughSpace
 	}
 	

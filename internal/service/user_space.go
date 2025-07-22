@@ -103,3 +103,7 @@ func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {
 		msg.Ack(false)
 	}
 }
+
+func (s *userSpaceService) UpdateLevel(ctx context.Context, userID string, newLevel uint8) error {
+	return s.repo.Postgres.UserSpace.UpdateLevel(ctx, userID, newLevel)
+}

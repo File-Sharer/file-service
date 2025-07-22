@@ -2,5 +2,5 @@ package model
 
 type UserSpace struct {
 	UserID   string `json:"userId"`
-	SubLevel uint8  `json:"subLevel"`
+	Level    uint8  `json:"level"`
 }

@@ -43,6 +43,12 @@ func (h *Handler) InitRoutes() *gin.Engine {
 
 	api := router.Group("/api")
 	{
+		usersSpaces := api.Group("/users-spaces")
+		usersSpaces.Use(h.mwSLInternal)
+		{
+			usersSpaces.PATCH("/level", h.usersSpacesUpdateLevel)
+		}
+
 		files := api.Group("/files")
 		files.Use(h.mwAuth)
 		{
