@@ -18,6 +18,7 @@ import (
 	pb "github.com/File-Sharer/file-service/hasher_pbs"
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/repository"
+	"github.com/File-Sharer/file-service/internal/repository/redisrepo"
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
@@ -30,26 +31,33 @@ type FileService struct {
 	hasher pb.HasherClient
 	httpClient *http.Client
 	userSpaceService UserSpace
+	rdb *redis.Client
 }
 
-func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient, userSpaceService UserSpace) *FileService {
+func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient, userSpaceService UserSpace, rdb *redis.Client) *FileService {
 	return &FileService{
 		logger: logger,
 		repo: repo,
 		hasher: hasherClient,
 		httpClient: &http.Client{},
 		userSpaceService: userSpaceService,
+		rdb: rdb,
 	}
 }
 
 func (s *FileService) Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
 	// Checking user creating files delay
-	delay := s.repo.Redis.Default.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
+	delay := s.rdb.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
 	if delay.Err() != redis.Nil {
 		return nil, errWaitDelay
 	}
+
+	userSpace, err := s.userSpaceService.Get(ctx, fileObj.CreatorID)
+	if err != nil {
+		return nil, err
+	}
 	
-	if fileHeader.Size > MAX_FILE_SIZE {
+	if fileHeader.Size > levelSpace[userSpace.SubLevel].maxFileSize {
 		return nil, errFileIsTooBig
 	}
 
@@ -57,7 +65,7 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	if err != nil {
 		return nil, err
 	}
-	if spaceSize + fileHeader.Size > MAX_SPACE_SIZE {
+	if spaceSize + fileHeader.Size > levelSpace[userSpace.SubLevel].maxSpaceSize {
 		return nil, errYouDontHaveEnoughSpace
 	}
 	
@@ -78,13 +86,13 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	}
 
 	// Sending user to timeout
-	if err := s.repo.Redis.Default.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2); err != nil {
+	if err := s.rdb.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) to timeout in redis: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
 
 	// Clear cache
-	if err := s.repo.Redis.File.Delete(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)); err != nil {
+	if err := s.rdb.Del(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to clear user(%s) files cache in redis: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
@@ -205,63 +213,51 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 }
 
 func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, error) {
-	fileCache, err := s.repo.Redis.File.Find(ctx, FilePrefix(id))
+	fileCache, err := redisrepo.Get[model.File](s.rdb, ctx, FilePrefix(id))
 	if err == nil {
 		return fileCache, nil
 	}
-
 	if err != redis.Nil {
 		return nil, err
 	}
 
-	fileDB, err := s.repo.Postgres.File.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	fileJSON, err := json.Marshal(fileDB)
+	file, err := s.repo.Postgres.File.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Caching result
-	if err := s.repo.Redis.File.Create(ctx, FilePrefix(fileDB.ID), fileJSON,  time.Hour * 12); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, FilePrefix(file.ID), file,  time.Hour); err != nil {
 		return nil, err
 	}
 
-	return fileDB, nil
+	return file, nil
 }
 
 func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
-	files, err := s.repo.Redis.File.FindMany(ctx, UserFilesPrefix(userID))
+	filesCache, err := redisrepo.GetMany[model.File](s.rdb, ctx, UserFilesPrefix(userID))
 	if err == nil {
-		return files, nil
+		return filesCache, nil
 	}
-
 	if err != redis.Nil {
 		return nil, err
 	}
 
-	filesDB, err := s.repo.Postgres.File.FindUserFiles(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	filesJSON, err := json.Marshal(filesDB)
+	files, err := s.repo.Postgres.File.FindUserFiles(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Caching result
-	if err := s.repo.Redis.File.Create(ctx, UserFilesPrefix(userID), filesJSON, time.Hour * 12); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, UserFilesPrefix(userID), files, time.Hour * 12); err != nil {
 		return nil, err
 	}
 
-	return filesDB, nil
+	return files, nil
 }
 
 func (s *FileService) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
-	permission, err := s.repo.Redis.File.HasPermission(ctx, PermissionPrefix(fileID, userID))
+	permission, err := s.rdb.Get(ctx, PermissionPrefix(fileID, userID)).Bool()
 	if err == nil {
 		return permission, nil
 	}
@@ -275,7 +271,7 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 		return false, err
 	}
 
-	if err := s.repo.Redis.File.Create(ctx, PermissionPrefix(fileID, userID), []byte(strconv.FormatBool(hasPermissionDB)), time.Hour * 24); err != nil {
+	if err := s.rdb.Set(ctx, PermissionPrefix(fileID, userID), []byte(strconv.FormatBool(hasPermissionDB)), time.Hour).Err(); err != nil {
 		return false, err
 	}
 
@@ -301,10 +297,7 @@ func (s *FileService) AddPermission(ctx context.Context, data AddPermissionData)
 	}
 
 	// Clear cache
-	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(data.FileID, data.UserToAddID)); err != nil {
-		return err
-	}
-	if err := s.repo.Redis.File.Delete(ctx, FilePermissionsPrefix(data.FileID)); err != nil {
+	if err := s.rdb.Del(ctx, PermissionPrefix(data.FileID, data.UserToAddID), FilePermissionsPrefix(data.FileID)).Err(); err != nil {
 		return err
 	}
 
@@ -377,7 +370,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user model.User
 		return errInternal
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID), SpaceSizePrefix(user.ID)); err != nil {
+	if err := s.rdb.Del(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID), SpaceSizePrefix(user.ID)).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to delete file(%s) from redis: %s", fileID, err.Error())
 		return errInternal
 	}
@@ -434,10 +427,7 @@ func (s *FileService) DeletePermission(ctx context.Context, data DeletePermissio
 	}
 
 	// Clear cache
-	if err := s.repo.Redis.File.Delete(ctx, PermissionPrefix(file.ID, data.UserToDeleteID)); err != nil {
-		return err
-	}
-	if err := s.repo.Redis.File.Delete(ctx, FilePermissionsPrefix(file.ID)); err != nil {
+	if err := s.rdb.Del(ctx, PermissionPrefix(file.ID, data.UserToDeleteID), FilePermissionsPrefix(file.ID)).Err(); err != nil {
 		return err
 	}
 
@@ -446,31 +436,25 @@ func (s *FileService) DeletePermission(ctx context.Context, data DeletePermissio
 }
 
 func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error) {
-	permissionsCache, err := s.repo.Redis.File.FindPermissions(ctx, FilePermissionsPrefix(fileID))
+	permissionsCache, err := redisrepo.GetMany[model.Permission](s.rdb, ctx, FilePermissionsPrefix(fileID))
 	if err == nil {
 		return permissionsCache, nil
 	}
-
 	if err != redis.Nil {
 		return nil, err
 	}
 
-	permissionsDB, err := s.repo.Postgres.File.FindPermissionsToFile(ctx, fileID, creatorID)
+	permissions, err := s.repo.Postgres.File.FindPermissionsToFile(ctx, fileID, creatorID)
 	if err != nil && err != pgx.ErrNoRows {
 		return nil, err
 	}
 
-	permissionsJSON, err := json.Marshal(permissionsDB)
-	if err != nil {
-		return nil, err
-	}
-
 	// Caching result
-	if err := s.repo.Redis.File.Create(ctx, FilePermissionsPrefix(fileID), permissionsJSON, time.Hour * 2); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, FilePermissionsPrefix(fileID), permissions, time.Hour); err != nil {
 		return nil, err
 	}
 
-	return permissionsDB, nil
+	return permissions, nil
 }
 
 func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) error {
@@ -491,7 +475,7 @@ func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) er
 		}
 	}
 
-	if err := s.repo.Redis.File.Delete(ctx, FilePrefix(id), UserFilesPrefix(creatorID), FilePermissionsPrefix(id)); err != nil {
+	if err := s.rdb.Del(ctx, FilePrefix(id), UserFilesPrefix(creatorID), FilePermissionsPrefix(id)).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to clear redis cache(file: %s): %s", id, err.Error())
 	}
 

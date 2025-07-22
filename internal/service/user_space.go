@@ -8,6 +8,7 @@ import (
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/rabbitmq"
 	"github.com/File-Sharer/file-service/internal/repository"
+	"github.com/File-Sharer/file-service/internal/repository/redisrepo"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -16,18 +17,43 @@ type userSpaceService struct {
 	logger *zap.Logger
 	repo   *repository.Repository
 	rabbitmq *rabbitmq.MQConn
+	rdb *redis.Client
 }
 
-func newUserSpaceService(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) UserSpace {
+func newUserSpaceService(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, rdb *redis.Client) UserSpace {
 	return &userSpaceService{
 		logger: logger,
 		repo: repo,
 		rabbitmq: rabbitmq,
+		rdb: rdb,
 	}
 }
 
+func (s *userSpaceService) Get(ctx context.Context, userID string) (*model.UserSpace, error) {
+	spaceCache, err := redisrepo.Get[model.UserSpace](s.rdb, ctx, SpacePrefix(userID))
+	if err == nil {
+		return spaceCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get user(%s) space from redis: %s", userID, err.Error())
+		return nil, errInternal
+	}
+
+	space, err := s.repo.Postgres.UserSpace.Get(ctx, userID)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get user(%s) space from postgres: %s", userID, err.Error())
+		return nil, errInternal
+	}
+
+	if err := redisrepo.SetJSON(s.rdb, ctx, SpacePrefix(userID), space, time.Minute * 30); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s) space in redis: %s", userID, err.Error())
+	}
+
+	return space, nil
+}
+
 func (s *userSpaceService) GetSize(ctx context.Context, userID string) (int64, error) {
-	spaceSizeCache, err := s.repo.Redis.Default.Get(ctx, SpaceSizePrefix(userID)).Int64()
+	spaceSizeCache, err := s.rdb.Get(ctx, SpaceSizePrefix(userID)).Int64()
 	if err == nil {
 		return spaceSizeCache, nil
 	}
@@ -42,7 +68,7 @@ func (s *userSpaceService) GetSize(ctx context.Context, userID string) (int64, e
 		return 0, errInternal
 	}
 
-	if err := s.repo.Redis.Default.Set(ctx, SpaceSizePrefix(userID), spaceSize, time.Minute * 5); err != nil {
+	if err := s.rdb.Set(ctx, SpaceSizePrefix(userID), spaceSize, time.Minute * 5).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) space size in redis: %s", userID, err.Error())
 		return 0, errInternal
 	}

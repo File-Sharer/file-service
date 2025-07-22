@@ -22,17 +22,18 @@ func (r *userSpaceRepo) Create(ctx context.Context, d model.UserSpace) error {
 	return err
 }
 
-func (r *userSpaceRepo) Find(ctx context.Context, userID string) (int64, error) {
-	var space int64
+func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpace, error) {
+	var userSpace model.UserSpace
 	if err := r.db.QueryRow(
 		ctx,
-		"select space from users_spaces where user_id = $1",
+		"select sub_level from users_spaces where user_id = $1",
 		userID,
-	).Scan(&space); err != nil {
-		return 0, err
+	).Scan(&userSpace.SubLevel); err != nil {
+		return nil, err
 	}
 
-	return space, nil
+	userSpace.UserID = userID
+	return &userSpace, nil
 }
 
 func (r *userSpaceRepo) GetSize(ctx context.Context, userID string) (int64, error) {

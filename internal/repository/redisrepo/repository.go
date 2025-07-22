@@ -2,38 +2,53 @@ package redisrepo
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
-	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/redis/go-redis/v9"
 )
 
-type Default interface {
-	Set(ctx context.Context, key string, value interface{}, expiry time.Duration) error
-	Get(ctx context.Context, key string) *redis.StringCmd
-	Delete(ctx context.Context, keys ...string) error
-	Incr(ctx context.Context, key string) *redis.IntCmd
-	Decr(ctx context.Context, key string) *redis.IntCmd
-	TTL(ctx context.Context, key string) time.Duration
-}
-
-type File interface {
-	Create(ctx context.Context, key string, value []byte, expiry time.Duration) error
-	Find(ctx context.Context, key string) (*model.File, error)
-	FindMany(ctx context.Context, key string) ([]*model.File, error)
-	HasPermission(ctx context.Context, key string) (bool, error)
-	Delete(ctx context.Context, keys ...string) error
-	FindPermissions(ctx context.Context, fileID string) ([]*model.Permission, error)
-}
-
-type RedisRepository struct {
-	Default
-	File
-}
-
-func NewRedisRepo(rdb *redis.Client) *RedisRepository {
-	return &RedisRepository{
-		Default: NewDefaultRedisRepo(rdb),
-		File: NewFileRepo(rdb),
+func SetJSON(r *redis.Client, ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	valueJSON, err := json.Marshal(value)
+	if err != nil {
+		return err
 	}
+
+	return r.Set(ctx, key, valueJSON, expiration).Err()
+}
+
+func Get[T any](r *redis.Client, ctx context.Context, key string) (*T, error) {
+	value, err := r.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if value == "null" {
+		return nil, nil
+	}
+
+	var result T
+	if err := json.Unmarshal([]byte(value), &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func GetMany[T any](r *redis.Client, ctx context.Context, key string) ([]*T, error) {
+	value, err := r.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if value == "null" {
+		return nil, nil
+	}
+
+	var result []*T
+	if err := json.Unmarshal([]byte(value), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

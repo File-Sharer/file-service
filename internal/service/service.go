@@ -8,10 +8,12 @@ import (
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/rabbitmq"
 	"github.com/File-Sharer/file-service/internal/repository"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
 type UserSpace interface {
+	Get(ctx context.Context, userID string) (*model.UserSpace, error)
 	GetSize(ctx context.Context, userID string) (int64, error)
 	StartCreatingUsersSpaces(ctx context.Context)
 }
@@ -34,13 +36,13 @@ type Service struct {
 	File
 }
 
-func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, hasherClient pb.HasherClient) *Service {
-	userSpaceService := newUserSpaceService(logger, repo, rabbitmq)
+func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, hasherClient pb.HasherClient, rdb *redis.Client) *Service {
+	userSpaceService := newUserSpaceService(logger, repo, rabbitmq, rdb)
 
 	return &Service{
 		logger: logger,
 		UserSpace: userSpaceService,
-		File: NewFileService(logger, repo, hasherClient, userSpaceService),
+		File: NewFileService(logger, repo, hasherClient, userSpaceService, rdb),
 	}
 }
 
