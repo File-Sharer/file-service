@@ -25,7 +25,7 @@ func (h *Handler) mwSLInternal(c *gin.Context) {
 	}
 
 	token := parts[1]
-	if token != os.Getenv("SL_Internal_Token") {
+	if token != os.Getenv("SL_INTERNAL_TOKEN") {
 		c.JSON(http.StatusForbidden, gin.H{"ok": false})
 		c.Abort()
 		return
