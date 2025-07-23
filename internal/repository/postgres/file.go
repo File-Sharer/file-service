@@ -16,13 +16,13 @@ func NewFileRepo(db *pgxpool.Pool) *FileRepo {
 }
 
 func (r *FileRepo) Create(ctx context.Context, file *model.File) error {
-	_, err := r.db.Exec(ctx, "insert into files(id, creator_id, size, url, public, filename, download_filename) values($1, $2, $3, $4, $5, $6, $7)", file.ID, file.CreatorID, file.Size, file.URL, file.Public, file.Filename, file.DownloadFilename)
+	_, err := r.db.Exec(ctx, "INSERT INTO files(id, creator_id, size, url, public, filename, download_filename) VALUES($1, $2, $3, $4, $5, $6, $7)", file.ID, file.CreatorID, file.Size, file.URL, file.Public, file.Filename, file.DownloadFilename)
 	return err
 }
 
 func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var file model.File
-	if err := r.db.QueryRow(ctx, "select id, creator_id, size, url, public, filename, download_filename, date_added from files where id = $1", id).Scan(&file.ID, &file.CreatorID, &file.Size, &file.URL, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
+	if err := r.db.QueryRow(ctx, "SELECT id, creator_id, size, url, public, filename, download_filename, date_added FROM files WHERE id = $1", id).Scan(&file.ID, &file.CreatorID, &file.Size, &file.URL, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
 		return nil, err
 	}
 
@@ -30,7 +30,7 @@ func (r *FileRepo) FindByID(ctx context.Context, id string) (*model.File, error)
 }
 
 func (r *FileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
-	rows, err := r.db.Query(ctx, "select id, creator_id, size, url, public, filename, download_filename, date_added from files where creator_id = $1", userID)
+	rows, err := r.db.Query(ctx, "SELECT id, creator_id, size, url, public, filename, download_filename, date_added FROM files WHERE creator_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -54,13 +54,13 @@ func (r *FileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.F
 }
 
 func (r *FileRepo) AddPermission(ctx context.Context, fileID string, userID string) error {
-	_, err := r.db.Exec(ctx, "insert into permissions(file_id, user_id) values($1, $2)", fileID, userID)
+	_, err := r.db.Exec(ctx, "INSERT INTO permissions(file_id, user_id) VALUES($1, $2)", fileID, userID)
 	return err
 }
 
 func (r *FileRepo) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
 	var exists bool
-	if err := r.db.QueryRow(ctx, "select exists(select 1 from permissions where file_id = $1 and user_id = $2)", fileID, userID).Scan(&exists); err != nil {
+	if err := r.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM permissions WHERE file_id = $1 AND user_id = $2)", fileID, userID).Scan(&exists); err != nil {
 		return false, err
 	}
 
@@ -68,17 +68,17 @@ func (r *FileRepo) HasPermission(ctx context.Context, fileID string, userID stri
 }
 
 func (r *FileRepo) DeletePermission(ctx context.Context, fileID string, userID string) error {
-	_, err := r.db.Exec(ctx, "delete from permissions where file_id = $1 and user_id = $2", fileID, userID)
+	_, err := r.db.Exec(ctx, "DELETE FROM permissions WHERE file_id = $1 AND user_id = $2", fileID, userID)
 	return err
 }
 
 func (r *FileRepo) Delete(ctx context.Context, id string) error {
-	_, err := r.db.Exec(ctx, "delete from files where id = $1", id)
+	_, err := r.db.Exec(ctx, "DELETE FROM files WHERE id = $1", id)
 	return err
 }
 
 func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID string) ([]*model.Permission, error) {
-	rows, err := r.db.Query(ctx, "select p.file_id, p.user_id from permissions p join files f on f.id = p.file_id and f.creator_id = $2 where p.file_id = $1", id, creatorID)
+	rows, err := r.db.Query(ctx, "SELECT p.file_id, p.user_id FROM permissions p JOIN files f ON f.id = p.file_id AND f.creator_id = $2 WHERE p.file_id = $1", id, creatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +102,11 @@ func (r *FileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID stri
 }
 
 func (r *FileRepo) TogglePublic(ctx context.Context, id, creatorID string) error {
-	_, err := r.db.Exec(ctx, "update files set public = not public where id = $1 and creator_id = $2", id, creatorID)
+	_, err := r.db.Exec(ctx, "UPDATE files SET public = NOT public WHERE id = $1 AND creator_id = $2", id, creatorID)
 	return err
 }
 
 func (r *FileRepo) ClearPermissions(ctx context.Context, id, creatorID string) error {
-	_, err := r.db.Exec(ctx, "delete from permissions p using files f where p.file_id = $1 and f.id = p.file_id and f.creator_id = $2", id, creatorID)
+	_, err := r.db.Exec(ctx, "DELETE FROM permissions p USING files f WHERE p.file_id = $1 AND f.id = p.file_id AND f.creator_id = $2", id, creatorID)
 	return err
 }

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,7 +19,7 @@ func newUserSpaceRepo(db *pgxpool.Pool) UserSpace {
 }
 
 func (r *userSpaceRepo) Create(ctx context.Context, d model.UserSpace) error {
-	_, err := r.db.Exec(ctx, "insert into users_spaces(user_id) values($1)", d.UserID)
+	_, err := r.db.Exec(ctx, "INSERT INTO users_spaces(user_id) VALUES($1)", d.UserID)
 	return err
 }
 
@@ -26,7 +27,7 @@ func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpac
 	var userSpace model.UserSpace
 	if err := r.db.QueryRow(
 		ctx,
-		"select level from users_spaces where user_id = $1",
+		"SELECT level FROM users_spaces WHERE user_id = $1",
 		userID,
 	).Scan(&userSpace.Level); err != nil {
 		return nil, err
@@ -37,19 +38,23 @@ func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpac
 }
 
 func (r *userSpaceRepo) GetSize(ctx context.Context, userID string) (int64, error) {
-	var size int64
+	var nullableSize sql.NullInt64
 	if err := r.db.QueryRow(
 		ctx,
-		"select sum(size) from files where creator_id = $1",
+		"SELECT SUM(size) FROM files WHERE creator_id = $1",
 		userID,
-	).Scan(&size); err != nil {
+	).Scan(&nullableSize); err != nil {
 		return 0, err
 	}
 
-	return size, nil
+	if nullableSize.Valid {
+		return nullableSize.Int64, nil
+	}
+
+	return 0, nil
 }
 
 func (r *userSpaceRepo) UpdateLevel(ctx context.Context, userID string, newLevel uint8) error {
-	_, err := r.db.Exec(ctx, "update users_spaces set level = $1 where user_id = $2", newLevel, userID)
+	_, err := r.db.Exec(ctx, "UPDATE users_spaces SET level = $1 WHERE user_id = $2", newLevel, userID)
 	return err
 }
