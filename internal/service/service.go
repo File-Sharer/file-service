@@ -19,9 +19,18 @@ type UserSpace interface {
 	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
 }
 
+type Folder interface {
+	Create(ctx context.Context, f model.Folder) (*model.Folder, error)
+	findByID(ctx context.Context, id string) (*model.Folder, error)
+	ProtectedFindByID(ctx context.Context, id string, user model.User) (*model.Folder, error)
+	Rename(ctx context.Context, id, userID, newName string) error
+	GetFolderContents(ctx context.Context, id, userID string) (*model.FolderContents, error)
+	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
+}
+
 type File interface {
 	Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error)
-	ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error)
+	ProtectedFindByID(ctx context.Context, fileID string, user model.User) (*model.File, error)
 	FindByID(ctx context.Context, id string) (*model.File, error)
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, data AddPermissionData) error
@@ -34,16 +43,19 @@ type File interface {
 type Service struct {
 	logger *zap.Logger
 	UserSpace
+	Folder
 	File
 }
 
 func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, hasherClient pb.HasherClient, rdb *redis.Client) *Service {
 	userSpaceService := newUserSpaceService(logger, repo, rabbitmq, rdb)
+	folderService := newFolderService(logger, repo, hasherClient, rdb)
 
 	return &Service{
 		logger: logger,
 		UserSpace: userSpaceService,
-		File: NewFileService(logger, repo, hasherClient, userSpaceService, rdb),
+		Folder: folderService,
+		File: NewFileService(logger, repo, hasherClient, userSpaceService, rdb, folderService),
 	}
 }
 

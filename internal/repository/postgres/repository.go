@@ -14,6 +14,15 @@ type UserSpace interface {
 	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
 }
 
+type Folder interface {
+	Create(ctx context.Context, f model.Folder) error
+	FindByID(ctx context.Context, id string) (*model.Folder, error)
+	HasPermission(ctx context.Context, id, userID string) (bool, error)
+	Update(ctx context.Context, id string, fields map[string]interface{}) error
+	GetFolderContents(ctx context.Context, id string) ([]*model.File, []*model.Folder, error)
+	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
+}
+
 type File interface {
 	Create(ctx context.Context, file *model.File) error
 	FindByID(ctx context.Context, id string) (*model.File, error)
@@ -29,12 +38,14 @@ type File interface {
 
 type PostgresRepository struct {
 	UserSpace
+	Folder
 	File
 }
 
 func NewPostgresRepo(db *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{
 		UserSpace: newUserSpaceRepo(db),
-		File: NewFileRepo(db),
+		Folder: newFolderRepo(db),
+		File: newFileRepo(db),
 	}
 }

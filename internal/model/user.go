@@ -1,8 +1,8 @@
 package model
 
 type User struct {
-	ID           string    `json:"id"`
-	Role         string    `json:"role"`
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
 type UserRes struct {

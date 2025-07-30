@@ -27,9 +27,9 @@ func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpac
 	var userSpace model.UserSpace
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT level FROM users_spaces WHERE user_id = $1",
+		"SELECT level, created_at FROM users_spaces WHERE user_id = $1",
 		userID,
-	).Scan(&userSpace.Level); err != nil {
+	).Scan(&userSpace.Level, &userSpace.CreatedAt); err != nil {
 		return nil, err
 	}
 

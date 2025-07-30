@@ -18,26 +18,34 @@ func (h *Handler) filesCreate(c *gin.Context) {
 
 	var fileObj model.File
 
+	folderID := strings.TrimSpace(c.PostForm("folderId"))
+	fileObj.FolderID = new(string)
+	if folderID != "" {
+		*fileObj.FolderID = folderID
+	} else {
+		fileObj.FolderID = nil
+	}
+
 	isPublicForm := c.PostForm("isPublic")
 	isPublic, err := strconv.ParseBool(isPublicForm)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "isPublic option is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "isPublic option type must be boolean"})
 		return
 	}
 
 	downloadFilename := strings.TrimSpace(c.PostForm("downloadFilename"))
-	if downloadFilename == "" {
+	if downloadFilename == "" && folderID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "download filename is required"})
 		return
 	}
 
 	fileObj.CreatorID = user.ID
-	fileObj.Public = isPublic
-	fileObj.DownloadFilename = downloadFilename
+	fileObj.Public = &isPublic
+	fileObj.DownloadFilename = &downloadFilename
 
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "file is require"})
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "file is required"})
 		return
 	}
 
@@ -55,7 +63,7 @@ func (h *Handler) filesGet(c *gin.Context) {
 
 	fileID := c.Param("file_id")
 
-	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, user.ID)
+	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, *user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -81,7 +89,7 @@ func (h *Handler) filesDownload(c *gin.Context) {
 
 	fileID := c.Param("file_id")
 
-	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, user.ID)
+	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, *user)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -94,7 +102,13 @@ func (h *Handler) filesDownload(c *gin.Context) {
 	}
 	defer f.Close()
 
-	c.Header("filename", file.DownloadFilename)
+
+	downloadFilename := *file.DownloadFilename
+	if file.FolderID != nil {
+		downloadFilename = file.Filename
+	}
+
+	c.Header("filename", downloadFilename)
 	io.Copy(c.Writer, f)
 }
 

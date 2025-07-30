@@ -50,6 +50,14 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			usersSpaces.GET("/level", h.mwAuth, h.usersSpacesGetLevel)
 		}
 
+		folders := api.Group("/folders")
+		folders.Use(h.mwAuth)
+		{
+			folders.POST("", h.foldersCreate)
+			folders.GET("/:id/contents", h.foldersGetContents)
+			folders.GET("", h.foldersGetUser)
+		}
+
 		files := api.Group("/files")
 		files.Use(h.mwAuth)
 		{

@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,9 +31,10 @@ type FileService struct {
 	httpClient *http.Client
 	userSpaceService UserSpace
 	rdb *redis.Client
+	folderService Folder
 }
 
-func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient, userSpaceService UserSpace, rdb *redis.Client) *FileService {
+func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClient pb.HasherClient, userSpaceService UserSpace, rdb *redis.Client, folderService Folder) *FileService {
 	return &FileService{
 		logger: logger,
 		repo: repo,
@@ -42,6 +42,7 @@ func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClien
 		httpClient: &http.Client{},
 		userSpaceService: userSpaceService,
 		rdb: rdb,
+		folderService: folderService,
 	}
 }
 
@@ -52,12 +53,12 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		return nil, errWaitDelay
 	}
 
-	userSpace, err := s.userSpaceService.Get(ctx, fileObj.CreatorID)
+	space, err := s.userSpaceService.Get(ctx, fileObj.CreatorID)
 	if err != nil {
 		return nil, err
 	}
 	
-	if fileHeader.Size > levelSpaceSizes[userSpace.Level].maxFileSize {
+	if fileHeader.Size > levelSpaceSizes[space.Level].maxFileSize {
 		return nil, errFileIsTooBig
 	}
 	
@@ -65,8 +66,8 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	if err != nil {
 		return nil, err
 	}
-	if spaceSize + fileHeader.Size > levelSpaceSizes[userSpace.Level].maxSpaceSize {
-		return nil, errYouDontHaveEnoughSpace
+	if spaceSize + fileHeader.Size > levelSpaceSizes[space.Level].maxSpaceSize {
+		return nil, errYouDoNotHaveEnoughSpace
 	}
 	
 	fileHashIDResp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
@@ -80,9 +81,9 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	fileObj.DateAdded = time.Now()
 
 	// Validating file extension
-	downloadFilenameExt := filepath.Ext(fileObj.DownloadFilename)
+	downloadFilenameExt := filepath.Ext(*fileObj.DownloadFilename)
 	if downloadFilenameExt == "" || downloadFilenameExt != ext {
-		fileObj.DownloadFilename += ext
+		*fileObj.DownloadFilename += ext
 	}
 
 	// Sending user to timeout
@@ -97,7 +98,31 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		return nil, errInternal
 	}
 
-	fileSize, fileURL, err := s.saveToFileStorage(fileObj.CreatorID, file, fileHeader)
+	path := fileObj.CreatorID
+	if fileObj.FolderID != nil {
+		folder, err := s.folderService.findByID(ctx, *fileObj.FolderID)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		fileObj.MainFolderID = new(string)
+		if folder.MainFolderID != nil {
+			*fileObj.MainFolderID = *folder.MainFolderID
+		} else {
+			*fileObj.MainFolderID = folder.ID
+		}
+
+		fileObj.DownloadFilename = nil
+		fileObj.Public = nil
+
+		sep := fmt.Sprintf("%s/files/%s/folders/", viper.GetString("fileStorage.origin"), fileObj.CreatorID)
+		path = fmt.Sprintf("%s/folders/%s", fileObj.CreatorID, strings.Split(folder.URL, sep)[1])
+	}
+
+	fileSize, fileURL, err := s.saveToFileStorage(path, file, fileHeader)
 	if err != nil {
 		s.logger.Error(err.Error())
 		return nil, errFailedToUploadFileToFileStorage
@@ -186,21 +211,26 @@ type uploadResponse struct {
 	FileSize int64  `json:"file_size"`
 }
 
-func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, userID string) (*model.File, error) {
+func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user model.User) (*model.File, error) {
 	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, errInternal
 	}
 
-	if file.CreatorID == userID {
+	// If the file is in a folder
+	if file.FolderID != nil {
+
+	}
+
+	if file.CreatorID == user.ID || user.Role == "ADMIN" {
 		return file, nil
 	}
 
-	if file.Public {
+	if *file.Public {
 		return file, nil
 	}
 
-	permission, err := s.HasPermission(ctx, fileID, userID)
+	permission, err := s.HasPermission(ctx, fileID, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +279,7 @@ func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*mode
 	}
 
 	// Caching result
-	if err := redisrepo.SetJSON(s.rdb, ctx, UserFilesPrefix(userID), files, time.Hour * 12); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, UserFilesPrefix(userID), files, time.Minute * 5); err != nil {
 		return nil, err
 	}
 
@@ -257,25 +287,24 @@ func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*mode
 }
 
 func (s *FileService) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
-	permission, err := s.rdb.Get(ctx, PermissionPrefix(fileID, userID)).Bool()
+	permissionCache, err := s.rdb.Get(ctx, FilePermissionPrefix(fileID, userID)).Bool()
 	if err == nil {
-		return permission, nil
+		return permissionCache, nil
 	}
-
 	if err != redis.Nil {
 		return false, err
 	}
 
-	hasPermissionDB, err := s.repo.Postgres.HasPermission(ctx, fileID, userID)
+	hasPermission, err := s.repo.Postgres.File.HasPermission(ctx, fileID, userID)
 	if err != nil {
 		return false, err
 	}
 
-	if err := s.rdb.Set(ctx, PermissionPrefix(fileID, userID), []byte(strconv.FormatBool(hasPermissionDB)), time.Hour).Err(); err != nil {
+	if err := s.rdb.Set(ctx, FilePermissionPrefix(fileID, userID), hasPermission, time.Minute).Err(); err != nil {
 		return false, err
 	}
 
-	return hasPermissionDB, nil
+	return hasPermission, nil
 }
 
 func (s *FileService) AddPermission(ctx context.Context, data AddPermissionData) error {
@@ -297,7 +326,7 @@ func (s *FileService) AddPermission(ctx context.Context, data AddPermissionData)
 	}
 
 	// Clear cache
-	if err := s.rdb.Del(ctx, PermissionPrefix(data.FileID, data.UserToAddID), FilePermissionsPrefix(data.FileID)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, FilePermissionPrefix(data.FileID, data.UserToAddID), FilePermissionsPrefix(data.FileID)).Err(); err != nil {
 		return err
 	}
 
@@ -347,7 +376,7 @@ func checkUserExistence(token string, userID string) error {
 }
 
 func (s *FileService) Delete(ctx context.Context, fileID string, user model.User) error {
-	file, err := s.ProtectedFindByID(ctx, fileID, user.ID)
+	file, err := s.ProtectedFindByID(ctx, fileID, user)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return errFileNotFound
@@ -427,7 +456,7 @@ func (s *FileService) DeletePermission(ctx context.Context, data DeletePermissio
 	}
 
 	// Clear cache
-	if err := s.rdb.Del(ctx, PermissionPrefix(file.ID, data.UserToDeleteID), FilePermissionsPrefix(file.ID)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, FilePermissionPrefix(file.ID, data.UserToDeleteID), FilePermissionsPrefix(file.ID)).Err(); err != nil {
 		return err
 	}
 
@@ -468,7 +497,7 @@ func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) er
 		return errInternal
 	}
 
-	if !file.Public {
+	if !*file.Public {
 		if err := s.repo.Postgres.File.ClearPermissions(ctx, id, creatorID); err != nil {
 			s.logger.Sugar().Errorf("failed to clear file(%s) permissions in postgres: %s", id, err.Error())
 			return errInternal
