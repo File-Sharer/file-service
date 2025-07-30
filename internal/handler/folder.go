@@ -41,7 +41,7 @@ func (h *Handler) foldersGetContents(c *gin.Context) {
 
 	id := c.Param("id")
 
-	contents, err := h.services.Folder.GetFolderContents(c.Request.Context(), id, user.ID)
+	contents, err := h.services.Folder.GetFolderContents(c.Request.Context(), id, *user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return

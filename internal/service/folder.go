@@ -216,25 +216,31 @@ func (s *folderService) Rename(ctx context.Context, id, userID, newName string) 
 	return nil
 }
 
-func (s *folderService) GetFolderContents(ctx context.Context, id, userID string) (*model.FolderContents, error) {
+func (s *folderService) GetFolderContents(ctx context.Context, id string, user model.User) (*model.FolderContents, error) {
 	folder, err := s.findByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	mainFolderID := *folder.MainFolderID
-	if folder.MainFolderID == nil {
-		mainFolderID = id
+	mainFolderID := id
+	if folder.MainFolderID != nil {
+		mainFolderID = *folder.MainFolderID
 	}
-	hasPermission, err := s.hasPermission(ctx, mainFolderID, userID)
+
+	mainFolder, err := s.findByID(ctx, mainFolderID)
+	if err != nil {
+		return nil, err
+	}
+
+	hasPermission, err := s.hasPermission(ctx, mainFolderID, user.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errNoAccess
 		}
-		s.logger.Sugar().Errorf("failed to get permission for folder(%s) to user(%s) from postgres: %s", id, userID ,err.Error())
+		s.logger.Sugar().Errorf("failed to get permission for folder(%s) to user(%s) from postgres: %s", id, user.ID ,err.Error())
 		return nil, errInternal
 	}
-	if !hasPermission {
+	if !hasPermission && mainFolder.CreatorID != user.ID && user.Role != "ADMIN" {
 		return nil, errNoAccess
 	}
 

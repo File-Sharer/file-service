@@ -24,7 +24,7 @@ type Folder interface {
 	findByID(ctx context.Context, id string) (*model.Folder, error)
 	ProtectedFindByID(ctx context.Context, id string, user model.User) (*model.Folder, error)
 	Rename(ctx context.Context, id, userID, newName string) error
-	GetFolderContents(ctx context.Context, id, userID string) (*model.FolderContents, error)
+	GetFolderContents(ctx context.Context, id string, user model.User) (*model.FolderContents, error)
 	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
 }
 
