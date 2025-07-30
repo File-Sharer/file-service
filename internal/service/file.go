@@ -217,9 +217,8 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user
 		return nil, errInternal
 	}
 
-	// If the file is in a folder
-	if file.FolderID != nil {
-
+	if file.MainFolderID != nil {
+		return nil, nil
 	}
 
 	if file.CreatorID == user.ID || user.Role == "ADMIN" {

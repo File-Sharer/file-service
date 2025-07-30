@@ -160,11 +160,15 @@ func (s *folderService) ProtectedFindByID(ctx context.Context, id string, user m
 		return nil, err
 	}
 
+	if folder.MainFolderID != nil {
+		return nil, nil
+	}
+
 	if folder.CreatorID == user.ID || user.Role == "ADMIN" {
 		return folder, nil
 	}
 
-	if *folder.Public {
+	if folder.Public != nil && *folder.Public {
 		return folder, nil
 	}
 
