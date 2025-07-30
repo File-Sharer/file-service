@@ -17,26 +17,29 @@ type UserSpace interface {
 	GetSize(ctx context.Context, userID string) (int64, error)
 	StartCreatingUsersSpaces(ctx context.Context)
 	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
+	getByUsername(ctx context.Context, username string) (*model.UserSpace, error)
 }
 
 type Folder interface {
 	Create(ctx context.Context, f model.Folder) (*model.Folder, error)
 	findByID(ctx context.Context, id string) (*model.Folder, error)
 	hasPermission(ctx context.Context, id, userID string) (bool, error)
-	ProtectedFindByID(ctx context.Context, id string, user model.User) (*model.Folder, error)
+	ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.Folder, error)
 	Rename(ctx context.Context, id, userID, newName string) error
-	GetFolderContents(ctx context.Context, id string, user model.User) (*model.FolderContents, error)
+	GetFolderContents(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.FolderContents, error)
 	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
+	AddPermission(ctx context.Context, d AddPermissionData) error
+	DeletePermission(ctx context.Context, d DeletePermissionData) error
 }
 
 type File interface {
 	Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error)
-	ProtectedFindByID(ctx context.Context, fileID string, user model.User) (*model.File, error)
+	ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) (*model.File, error)
 	FindByID(ctx context.Context, id string) (*model.File, error)
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
-	AddPermission(ctx context.Context, data AddPermissionData) error
-	Delete(ctx context.Context, fileID string, user model.User) error
-	DeletePermission(ctx context.Context, data DeletePermissionData) error
+	AddPermission(ctx context.Context, d AddPermissionData) error
+	Delete(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) error
+	DeletePermission(ctx context.Context, d DeletePermissionData) error
 	FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error)
 	TogglePublic(ctx context.Context, id, creatorID string) error
 }
@@ -50,7 +53,7 @@ type Service struct {
 
 func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn, hasherClient pb.HasherClient, rdb *redis.Client) *Service {
 	userSpaceService := newUserSpaceService(logger, repo, rabbitmq, rdb)
-	folderService := newFolderService(logger, repo, hasherClient, rdb)
+	folderService := newFolderService(logger, repo, hasherClient, rdb, userSpaceService)
 
 	return &Service{
 		logger: logger,

@@ -38,12 +38,12 @@ func (r *folderRepo) FindByID(ctx context.Context, id string) (*model.Folder, er
 	return &f, nil
 }
 
-func (r *folderRepo) HasPermission(ctx context.Context, id, userID string) (bool, error) {
-	var exists bool
+func (r *folderRepo) HasPermission(ctx context.Context, id, username string) (bool, error) {
+	exists := false
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT EXISTS(SELECT 1 FROM folder_permissions p JOIN folders f ON p.folder_id = f.id WHERE p.folder_id = $1 AND p.user_id = $2 AND f.main_folder_id = null)",
-		id, userID,
+		"SELECT EXISTS(SELECT 1 FROM folder_permissions p JOIN folders f ON p.folder_id = f.id WHERE p.folder_id = $1 AND p.username = $2 AND f.main_folder_id IS NULL)",
+		id, username,
 	).Scan(&exists); err != nil {
 		return false, err
 	}
@@ -162,4 +162,19 @@ func (r *folderRepo) GetUserFolders(ctx context.Context, userID string) ([]*mode
 	}
 
 	return folders, nil
+}
+
+func (r *folderRepo) AddPermission(ctx context.Context, folderID, username string) error {
+	_, err := r.db.Exec(ctx, "INSERT INTO folder_permissions(folder_id, username) VALUES($1, $2)", folderID, username)
+	return err
+}
+
+func (r *folderRepo) DeletePermission(ctx context.Context, folderID, username string) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM folder_permissions WHERE folder_id = $1 AND username = $2", folderID, username)
+	return err
+}
+
+func (r *folderRepo) Delete(ctx context.Context, folderID, userID string) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM folders WHERE id = $1 AND creator_id = $2", folderID, userID)
+	return err
 }

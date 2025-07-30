@@ -53,22 +53,26 @@ func (r *fileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.F
 	return files, nil
 }
 
-func (r *fileRepo) AddPermission(ctx context.Context, fileID string, userID string) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO file_permissions(file_id, user_id) VALUES($1, $2)", fileID, userID)
+func (r *fileRepo) AddPermission(ctx context.Context, fileID, username string) error {
+	_, err := r.db.Exec(ctx, "INSERT INTO file_permissions(file_id, username) VALUES($1, $2)", fileID, username)
 	return err
 }
 
-func (r *fileRepo) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
-	var exists bool
-	if err := r.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM file_permissions WHERE file_id = $1 AND user_id = $2)", fileID, userID).Scan(&exists); err != nil {
+func (r *fileRepo) HasPermission(ctx context.Context, fileID, username string) (bool, error) {
+	exists := false
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT EXISTS(SELECT 1 FROM file_permissions WHERE file_id = $1 AND username = $2)",
+		fileID, username,
+		).Scan(&exists); err != nil {
 		return false, err
 	}
 
 	return exists, nil
 }
 
-func (r *fileRepo) DeletePermission(ctx context.Context, fileID string, userID string) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM file_permissions WHERE file_id = $1 AND user_id = $2", fileID, userID)
+func (r *fileRepo) DeletePermission(ctx context.Context, fileID, username string) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM file_permissions WHERE file_id = $1 AND username = $2", fileID, username)
 	return err
 }
 
@@ -103,10 +107,5 @@ func (r *fileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID stri
 
 func (r *fileRepo) TogglePublic(ctx context.Context, id, creatorID string) error {
 	_, err := r.db.Exec(ctx, "UPDATE files SET public = NOT public WHERE id = $1 AND creator_id = $2", id, creatorID)
-	return err
-}
-
-func (r *fileRepo) ClearPermissions(ctx context.Context, id, creatorID string) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM file_permissions p USING files f WHERE p.file_id = $1 AND f.id = p.file_id AND f.creator_id = $2", id, creatorID)
 	return err
 }

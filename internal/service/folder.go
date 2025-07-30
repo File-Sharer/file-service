@@ -27,15 +27,17 @@ type folderService struct {
 	hasher pb.HasherClient
 	rdb *redis.Client
 	httpClient *http.Client
+	userSpaceService UserSpace
 }
 
-func newFolderService(logger *zap.Logger, repo *repository.Repository, hasher pb.HasherClient, rdb *redis.Client) Folder {
+func newFolderService(logger *zap.Logger, repo *repository.Repository, hasher pb.HasherClient, rdb *redis.Client, userSpaceService UserSpace) Folder {
 	return &folderService{
 		logger: logger,
 		repo: repo,
 		hasher: hasher,
 		rdb: rdb,
 		httpClient: &http.Client{},
+		userSpaceService: userSpaceService,
 	}
 }
 
@@ -154,7 +156,7 @@ func (s *folderService) findByID(ctx context.Context, id string) (*model.Folder,
 	return folder, nil
 }
 
-func (s *folderService) ProtectedFindByID(ctx context.Context, id string, user model.User) (*model.Folder, error) {
+func (s *folderService) ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.Folder, error) {
 	folder, err := s.findByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -164,7 +166,7 @@ func (s *folderService) ProtectedFindByID(ctx context.Context, id string, user m
 		return nil, nil
 	}
 
-	if folder.CreatorID == user.ID || user.Role == "ADMIN" {
+	if folder.CreatorID == userSpace.UserID || userRole == "ADMIN" {
 		return folder, nil
 	}
 
@@ -172,7 +174,7 @@ func (s *folderService) ProtectedFindByID(ctx context.Context, id string, user m
 		return folder, nil
 	}
 
-	permission, err := s.hasPermission(ctx, id, user.ID)
+	permission, err := s.hasPermission(ctx, id, userSpace.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +222,7 @@ func (s *folderService) Rename(ctx context.Context, id, userID, newName string) 
 	return nil
 }
 
-func (s *folderService) GetFolderContents(ctx context.Context, id string, user model.User) (*model.FolderContents, error) {
+func (s *folderService) GetFolderContents(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.FolderContents, error) {
 	folder, err := s.findByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -236,15 +238,15 @@ func (s *folderService) GetFolderContents(ctx context.Context, id string, user m
 		return nil, err
 	}
 
-	hasPermission, err := s.hasPermission(ctx, mainFolderID, user.ID)
+	hasPermission, err := s.hasPermission(ctx, mainFolderID, userSpace.UserID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errNoAccess
 		}
-		s.logger.Sugar().Errorf("failed to get permission for folder(%s) to user(%s) from postgres: %s", id, user.ID ,err.Error())
+		s.logger.Sugar().Errorf("failed to get permission for folder(%s) to user(%s) from postgres: %s", id, userSpace.UserID ,err.Error())
 		return nil, errInternal
 	}
-	if !hasPermission && mainFolder.CreatorID != user.ID && user.Role != "ADMIN" {
+	if !hasPermission && mainFolder.CreatorID != userSpace.UserID && userRole != "ADMIN" {
 		return nil, errNoAccess
 	}
 
@@ -296,4 +298,49 @@ func (s *folderService) GetUserFolders(ctx context.Context, userID string) ([]*m
 	}
 
 	return folders, nil
+}
+
+func (s *folderService) AddPermission(ctx context.Context, d AddPermissionData) error {
+	folder, err := s.findByID(ctx, d.ResourceID)
+	if err != nil {
+		return err
+	}
+
+	// Skip if the folder is nested
+	if folder.MainFolderID != nil {
+		return nil
+	}
+
+	if d.UserSpace.UserID != folder.CreatorID {
+		return errNoAccess
+	}
+
+	if d.UserToAddName == d.UserSpace.Username {
+		return errCantAddPermissionForYourself
+	}
+
+	// Clear cache
+	if err := s.rdb.Del(ctx, FolderPermissionPrefix(d.ResourceID, d.UserToAddName), FolderPermissionsPrefix(d.ResourceID)).Err(); err != nil {
+		return err
+	}
+
+	return s.repo.Postgres.Folder.AddPermission(ctx, d.ResourceID, d.UserToAddName)
+}
+
+func (s *folderService) DeletePermission(ctx context.Context, d DeletePermissionData) error {
+	folder, err := s.findByID(ctx, d.ResourceID)
+	if err != nil {
+		return err
+	}
+
+	if d.UserID != folder.CreatorID && d.UserRole != "ADMIN" {
+		return errNoAccess
+	}
+
+	// Clear cache
+	if err := s.rdb.Del(ctx, FolderPermissionPrefix(folder.ID, d.UserToDeleteName), FolderPermissionsPrefix(folder.ID)).Err(); err != nil {
+		return err
+	}
+
+	return s.repo.Postgres.Folder.DeletePermission(ctx, folder.ID, d.UserToDeleteName)
 }

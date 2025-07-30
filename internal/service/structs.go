@@ -1,14 +1,16 @@
 package service
 
+import "github.com/File-Sharer/file-service/internal/model"
+
 type AddPermissionData struct {
-	UserToken   string
-	FileID      string
-	UserID      string
-	UserToAddID string
+	ResourceID    string
+	UserSpace     model.UserSpace
+	UserToAddName string
 }
 
 type DeletePermissionData struct {
-	FileID         string
-	UserID         string
-	UserToDeleteID string
+	ResourceID       string
+	UserID           string
+	UserRole         string
+	UserToDeleteName string
 }

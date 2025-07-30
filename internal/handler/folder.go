@@ -14,7 +14,7 @@ type foldersCreateReq struct {
 }
 
 func (h *Handler) foldersCreate(c *gin.Context) {
-	user := h.getUser(c)
+	userSpace := h.getUserSpace(c)
 
 	var input foldersCreateReq
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -24,7 +24,7 @@ func (h *Handler) foldersCreate(c *gin.Context) {
 
 	folder, err := h.services.Folder.Create(c.Request.Context(), model.Folder{
 		FolderID: input.FolderID,
-		CreatorID: user.ID,
+		CreatorID: userSpace.UserID,
 		Name: input.Name,
 		Public: input.Public,
 	})
@@ -37,11 +37,12 @@ func (h *Handler) foldersCreate(c *gin.Context) {
 }
 
 func (h *Handler) foldersGetContents(c *gin.Context) {
-	user := h.getUser(c)
+	userSpace := h.getUserSpace(c)
+	userRole := h.getUserRole(c)
 
 	id := c.Param("id")
 
-	contents, err := h.services.Folder.GetFolderContents(c.Request.Context(), id, *user)
+	contents, err := h.services.Folder.GetFolderContents(c.Request.Context(), id, *userRole, *userSpace)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -51,9 +52,9 @@ func (h *Handler) foldersGetContents(c *gin.Context) {
 }
 
 func (h *Handler) foldersGetUser(c *gin.Context) {
-	user := h.getUser(c)
+	userSpace := h.getUserSpace(c)
 
-	folders, err := h.services.Folder.GetUserFolders(c.Request.Context(), user.ID)
+	folders, err := h.services.Folder.GetUserFolders(c.Request.Context(), userSpace.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return

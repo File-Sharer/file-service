@@ -39,7 +39,7 @@ func (s *userSpaceService) Get(ctx context.Context, userID string) (*model.UserS
 		return nil, errInternal
 	}
 
-	space, err := s.repo.Postgres.UserSpace.Get(ctx, userID)
+	space, err := s.repo.Postgres.UserSpace.GetByID(ctx, userID)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to get user(%s) space from postgres: %s", userID, err.Error())
 		return nil, errInternal
@@ -77,7 +77,8 @@ func (s *userSpaceService) GetSize(ctx context.Context, userID string) (int64, e
 }
 
 type userCreated struct {
-	UserID string `json:"userId"`
+	UserID     string `json:"userId"`
+	Username   string `json:"username"`
 }
 
 func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {
@@ -94,7 +95,7 @@ func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {
 			continue
 		}
 
-		if err := s.repo.Postgres.UserSpace.Create(ctx, model.UserSpace{UserID: data.UserID}); err != nil {
+		if err := s.repo.Postgres.UserSpace.Create(ctx, model.UserSpace{UserID: data.UserID, Username: data.Username}); err != nil {
 			s.logger.Sugar().Errorf("failed to create user(%s) space in postgres: %s", data.UserID, err.Error())
 			msg.Nack(false, true)
 			continue
@@ -106,4 +107,27 @@ func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {
 
 func (s *userSpaceService) UpdateLevel(ctx context.Context, userID string, newLevel uint8) error {
 	return s.repo.Postgres.UserSpace.UpdateLevel(ctx, userID, newLevel)
+}
+
+func (s *userSpaceService) getByUsername(ctx context.Context, username string) (*model.UserSpace, error) {
+	spaceCache, err := redisrepo.Get[model.UserSpace](s.rdb, ctx, SpaceByUsernamePrefix(username))
+	if err == nil {
+		return spaceCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get user space by username(%s) from redis: %s", username, err.Error())
+		return nil, errInternal
+	}
+
+	space, err := s.repo.Postgres.UserSpace.GetByUsername(ctx, username)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get user space by username(%s) from postgres: %s", username, err.Error())
+		return nil, errInternal
+	}
+
+	if err := redisrepo.SetJSON(s.rdb, ctx, SpaceByUsernamePrefix(username), space, time.Minute * 2); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s) space in redis: %s", username, err.Error())
+	}
+
+	return space, nil
 }

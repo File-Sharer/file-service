@@ -7,6 +7,7 @@ type File struct {
 	MainFolderID      *string   `json:"mainFolderId"`
 	FolderID          *string   `json:"folderId"`
 	CreatorID         string    `json:"creatorId"`
+	CreatorName       *string   `json:"creatorName"`
 	Size              int64     `json:"size"`
 	URL               string    `json:"url"`
 	Public            *bool     `json:"public"`

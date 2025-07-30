@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,25 +210,33 @@ type uploadResponse struct {
 	FileSize int64  `json:"file_size"`
 }
 
-func (s *FileService) ProtectedFindByID(ctx context.Context, fileID string, user model.User) (*model.File, error) {
+func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) (*model.File, error) {
 	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, errInternal
 	}
 
 	if file.MainFolderID != nil {
-		return nil, nil
+		hasPermission, err := s.folderService.hasPermission(ctx, *file.MainFolderID, userSpace.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if hasPermission {
+			return file, nil
+		}
+
+		return nil, errNoAccess
 	}
 
-	if file.CreatorID == user.ID || user.Role == "ADMIN" {
+	if file.CreatorID == userSpace.UserID || userRole == "ADMIN" {
 		return file, nil
 	}
 
-	if *file.Public {
+	if file.Public != nil && *file.Public {
 		return file, nil
 	}
 
-	permission, err := s.HasPermission(ctx, fileID, user.ID)
+	permission, err := s.HasPermission(ctx, fileID, userSpace.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +303,7 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 
 	hasPermission, err := s.repo.Postgres.File.HasPermission(ctx, fileID, userID)
 	if err != nil {
+		s.logger.Sugar().Errorf("failed to get if user(%s) has permission to file(%s) from postgres: %s", userID, fileID, err.Error())
 		return false, err
 	}
 
@@ -306,76 +314,35 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 	return hasPermission, nil
 }
 
-func (s *FileService) AddPermission(ctx context.Context, data AddPermissionData) error {
-	file, err := s.FindByID(ctx, data.FileID)
+func (s *FileService) AddPermission(ctx context.Context, d AddPermissionData) error {
+	file, err := s.FindByID(ctx, d.ResourceID)
 	if err != nil {
 		return err
 	}
 
-	if file.CreatorID != data.UserID {
+	// Skip if the file is nested
+	if file.MainFolderID != nil {
+		return nil
+	}
+
+	if d.UserSpace.UserID != file.CreatorID {
 		return errNoAccess
 	}
 
-	if data.UserToAddID == file.CreatorID {
+	if d.UserToAddName == d.UserSpace.Username {
 		return errCantAddPermissionForYourself
 	}
 
-	if err := checkUserExistence(data.UserToken, data.UserToAddID); err != nil {
-		return err
-	}
-
 	// Clear cache
-	if err := s.rdb.Del(ctx, FilePermissionPrefix(data.FileID, data.UserToAddID), FilePermissionsPrefix(data.FileID)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, FilePermissionPrefix(d.ResourceID, d.UserToAddName), FilePermissionsPrefix(d.ResourceID)).Err(); err != nil {
 		return err
 	}
 
-	err = s.repo.Postgres.File.AddPermission(ctx, data.FileID, data.UserToAddID)
-	return err
+	return s.repo.Postgres.File.AddPermission(ctx, d.ResourceID, d.UserToAddName)
 }
 
-func checkUserExistence(token string, userID string) error {
-	host := viper.GetString("userService.host")
-	endpoint := "/api/user/" + userID
-
-	client := &http.Client{}
-
-	req := &http.Request{
-		Proto: "HTTP/1.1",
-		Method: "GET",
-		URL: &url.URL{
-			Scheme: "http",
-			Host: host,
-			Path: endpoint,
-		},
-		Header: map[string][]string{
-			"Authorization": {"Bearer " + token},
-		},
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return errUserNotFound
-	}
-
-	var userRes model.UserRes
-	if err := json.NewDecoder(res.Body).Decode(&userRes); err != nil {
-		return err
-	}
-
-	if !userRes.Ok {
-		return errUserNotFound
-	}
-
-	return nil
-}
-
-func (s *FileService) Delete(ctx context.Context, fileID string, user model.User) error {
-	file, err := s.ProtectedFindByID(ctx, fileID, user)
+func (s *FileService) Delete(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) error {
+	file, err := s.ProtectedFindByID(ctx, fileID, userRole, userSpace)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return errFileNotFound
@@ -384,11 +351,11 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user model.User
 		return errInternal
 	}
 
-	if file.CreatorID != user.ID && user.Role != "ADMIN" {
+	if file.CreatorID != userSpace.UserID && userRole != "ADMIN" {
 		return errNoAccess
 	}
 	
-	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", user.ID, file.Filename)}); err != nil {
+	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", userSpace.UserID, file.Filename)}); err != nil {
 		s.logger.Error(err.Error())
 		return errInternal
 	}
@@ -398,7 +365,7 @@ func (s *FileService) Delete(ctx context.Context, fileID string, user model.User
 		return errInternal
 	}
 
-	if err := s.rdb.Del(ctx, FilePrefix(fileID), UserFilesPrefix(user.ID), SpaceSizePrefix(user.ID)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, FilePrefix(fileID), UserFilesPrefix(userSpace.UserID), SpaceSizePrefix(userSpace.UserID)).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to delete file(%s) from redis: %s", fileID, err.Error())
 		return errInternal
 	}
@@ -444,23 +411,22 @@ func (s *FileService) deleteFiles(paths []string) error {
 	return nil
 }
 
-func (s *FileService) DeletePermission(ctx context.Context, data DeletePermissionData) error {
-	file, err := s.FindByID(ctx, data.FileID)
+func (s *FileService) DeletePermission(ctx context.Context, d DeletePermissionData) error {
+	file, err := s.FindByID(ctx, d.ResourceID)
 	if err != nil {
 		return err
 	}
 
-	if data.UserID != file.CreatorID {
+	if d.UserID != file.CreatorID && d.UserRole != "ADMIN" {
 		return errNoAccess
 	}
 
 	// Clear cache
-	if err := s.rdb.Del(ctx, FilePermissionPrefix(file.ID, data.UserToDeleteID), FilePermissionsPrefix(file.ID)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, FilePermissionPrefix(file.ID, d.UserToDeleteName), FilePermissionsPrefix(file.ID)).Err(); err != nil {
 		return err
 	}
 
-	err = s.repo.Postgres.File.DeletePermission(ctx, data.FileID, data.UserToDeleteID)
-	return err
+	return s.repo.Postgres.File.DeletePermission(ctx, d.ResourceID, d.UserToDeleteName)
 }
 
 func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error) {
@@ -486,21 +452,9 @@ func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creator
 }
 
 func (s *FileService) TogglePublic(ctx context.Context, id, creatorID string) error {
-	file, err := s.FindByID(ctx, id)
-	if err != nil {
-		return err
-	}
-
 	if err := s.repo.Postgres.File.TogglePublic(ctx, id, creatorID); err != nil {
 		s.logger.Sugar().Errorf("failed to toggle file(%s) public field value in postgres: %s", id, err.Error())
 		return errInternal
-	}
-
-	if !*file.Public {
-		if err := s.repo.Postgres.File.ClearPermissions(ctx, id, creatorID); err != nil {
-			s.logger.Sugar().Errorf("failed to clear file(%s) permissions in postgres: %s", id, err.Error())
-			return errInternal
-		}
 	}
 
 	if err := s.rdb.Del(ctx, FilePrefix(id), UserFilesPrefix(creatorID), FilePermissionsPrefix(id)).Err(); err != nil {

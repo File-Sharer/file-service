@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/File-Sharer/file-service/internal/model"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,18 +24,30 @@ func (r *userSpaceRepo) Create(ctx context.Context, d model.UserSpace) error {
 	return err
 }
 
-func (r *userSpaceRepo) Get(ctx context.Context, userID string) (*model.UserSpace, error) {
-	var userSpace model.UserSpace
+func (r *userSpaceRepo) GetByID(ctx context.Context, userID string) (*model.UserSpace, error) {
+	space := new(model.UserSpace)
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT level, created_at FROM users_spaces WHERE user_id = $1",
+		"SELECT user_id, username, level, created_at FROM users_spaces WHERE user_id = $1",
 		userID,
-	).Scan(&userSpace.Level, &userSpace.CreatedAt); err != nil {
+	).Scan(&space.UserID, &space.Username, &space.Level, &space.CreatedAt); err != nil && err != pgx.ErrNoRows {
 		return nil, err
 	}
 
-	userSpace.UserID = userID
-	return &userSpace, nil
+	return space, nil
+}
+
+func (r *userSpaceRepo) GetByUsername(ctx context.Context, username string) (*model.UserSpace, error) {
+	space := new(model.UserSpace)
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT user_id, username, level, created_at FROM users_spaces WHERE username = $1",
+		username,
+	).Scan(&space.UserID, &space.Username, &space.Level, &space.CreatedAt); err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
+	
+	return space, nil
 }
 
 func (r *userSpaceRepo) GetSize(ctx context.Context, userID string) (int64, error) {

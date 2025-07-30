@@ -90,22 +90,44 @@ func (h *Handler) getToken(c *gin.Context) (string, error) {
 	return token, nil
 }
 
-func (h *Handler) getUserDataFromToken(token string) (*model.User, error) {
-	user, err := h.hasherClient.DecodeJWT(context.Background(), &pb.DecodeJWTReq{Secret: os.Getenv("HASHER_SECRET"), Jwt: token})
+func (h *Handler) getUserDataFromToken(ctx context.Context, token string) (*model.UserSpace, string, error) {
+	decoded, err := h.hasherClient.DecodeJWT(context.Background(), &pb.DecodeJWTReq{Secret: os.Getenv("HASHER_SECRET"), Jwt: token})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return &model.User{ID: user.UserId, Role: user.Role}, nil
+	userSpace, err := h.services.UserSpace.Get(ctx, decoded.UserId)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return userSpace, decoded.Role, nil
 }
 
-func (h *Handler) getUser(c *gin.Context) *model.User {
-	userReq, _ := c.Get("user")
-
-	user, ok := userReq.(model.User)
+func (h *Handler) getUserSpace(c *gin.Context) *model.UserSpace {
+	userSpaceReq, ok := c.Get("user-space")
 	if !ok {
 		return nil
 	}
 
-	return &user
+	userSpace, ok := userSpaceReq.(model.UserSpace)
+	if !ok {
+		return nil
+	}
+
+	return &userSpace
+}
+
+func (h *Handler) getUserRole(c *gin.Context) *string {
+	userRoleReq, ok := c.Get("user-role")
+	if !ok {
+		return nil
+	}
+
+	userRole, ok := userRoleReq.(string)
+	if !ok {
+		return nil
+	}
+
+	return &userRole
 }

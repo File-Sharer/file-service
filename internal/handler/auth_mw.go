@@ -14,14 +14,15 @@ func (h *Handler) mwAuth(c *gin.Context) {
 		return
 	}
 
-	user, err := h.getUserDataFromToken(token)
+	userSpace, userRole, err := h.getUserDataFromToken(c.Request.Context(), token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		c.Abort()
 		return
 	}
 
-	c.Set("user", *user)
+	c.Set("user-space", *userSpace)
+	c.Set("user-role", userRole)
 
 	c.Next()
 }
