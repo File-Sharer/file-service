@@ -104,9 +104,9 @@ func (h *Handler) filesDownload(c *gin.Context) {
 	}
 	defer f.Close()
 	
-	downloadFilename := *file.DownloadFilename
-	if file.FolderID != nil {
-		downloadFilename = file.Filename
+	downloadFilename := file.Filename
+	if file.DownloadFilename != nil {
+		downloadFilename = *file.DownloadFilename
 	}
 
 	c.Header("filename", downloadFilename)
