@@ -77,8 +77,8 @@ func (s *userSpaceService) GetSize(ctx context.Context, userID string) (int64, e
 }
 
 type userCreated struct {
-	UserID     string `json:"userId"`
-	Username   string `json:"username"`
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
 }
 
 func (s *userSpaceService) StartCreatingUsersSpaces(ctx context.Context) {

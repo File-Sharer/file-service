@@ -198,7 +198,7 @@ func (h *Handler) filesFindPermissionsToFile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": permissions})
+	c.JSON(http.StatusOK, permissions)
 }
 
 func (h *Handler) filesTogglePublic(c *gin.Context) {

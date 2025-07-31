@@ -30,6 +30,7 @@ type Folder interface {
 	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
 	AddPermission(ctx context.Context, d AddPermissionData) error
 	DeletePermission(ctx context.Context, d DeletePermissionData) error
+	GetPermissions(ctx context.Context, folderID, userID string) ([]*string, error)
 }
 
 type File interface {
@@ -40,7 +41,7 @@ type File interface {
 	AddPermission(ctx context.Context, d AddPermissionData) error
 	Delete(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) error
 	DeletePermission(ctx context.Context, d DeletePermissionData) error
-	FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error)
+	FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*string, error)
 	TogglePublic(ctx context.Context, id, creatorID string) error
 }
 

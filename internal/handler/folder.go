@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/File-Sharer/file-service/internal/model"
+	"github.com/File-Sharer/file-service/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,4 +62,58 @@ func (h *Handler) foldersGetUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, folders)
+}
+
+func (h *Handler) foldersGetPermissions(c *gin.Context) {
+	userSpace := h.getUserSpace(c)
+
+	folderID := c.Param("id")
+
+	permissions, err := h.services.Folder.GetPermissions(c.Request.Context(), folderID, userSpace.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, permissions)
+}
+
+func (h *Handler) foldersAddPermission(c *gin.Context) {
+	userSpace := h.getUserSpace(c)
+	userRole := h.getUserRole(c)
+
+	folderID := c.Param("id")
+	userToAddName := c.Param("username")
+
+	if err := h.services.Folder.AddPermission(c.Request.Context(), service.AddPermissionData{
+		ResourceID: folderID,
+		UserSpace: *userSpace,
+		UserRole: *userRole,
+		UserToAddName: userToAddName,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
+}
+
+func (h *Handler) foldersDeletePermission(c *gin.Context) {
+	userSpace := h.getUserSpace(c)
+	userRole := h.getUserRole(c)
+
+	folderID := c.Param("id")
+	userToDeleteName := c.Param("username")
+
+	if err := h.services.Folder.DeletePermission(c.Request.Context(), service.DeletePermissionData{
+		ResourceID: folderID,
+		UserID: userSpace.UserID,
+		UserRole: *userRole,
+		UserToDeleteName: userToDeleteName,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
 }

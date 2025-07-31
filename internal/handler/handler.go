@@ -56,6 +56,9 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			folders.POST("", h.foldersCreate)
 			folders.GET("/:id/contents", h.foldersGetContents)
 			folders.GET("", h.foldersGetUser)
+			folders.GET("/:id/permissions", h.foldersGetPermissions)
+			folders.PUT("/:id/:username", h.foldersAddPermission)
+			folders.DELETE("/:id/:username", h.foldersDeletePermission)
 		}
 
 		files := api.Group("/files")
@@ -65,9 +68,9 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			files.GET("/:file_id", h.filesGet)
 			files.GET("", h.filesFindUser)
 			files.GET("/:file_id/dl", h.filesDownload)
-			files.PUT("/:file_id/:user_id", h.filesAddPermission)
+			files.PUT("/:file_id/:username", h.filesAddPermission)
 			files.DELETE("/:file_id", h.filesDelete)
-			files.DELETE("/:file_id/:user_id", h.filesDeletePermission)
+			files.DELETE("/:file_id/:username", h.filesDeletePermission)
 			files.GET("/:file_id/permissions", h.filesFindPermissionsToFile)
 			files.PATCH("/:file_id/togglepub", h.filesTogglePublic)
 		}

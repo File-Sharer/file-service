@@ -325,7 +325,7 @@ func (s *FileService) AddPermission(ctx context.Context, d AddPermissionData) er
 		return nil
 	}
 
-	if d.UserSpace.UserID != file.CreatorID {
+	if d.UserSpace.UserID != file.CreatorID && d.UserRole != "ADMIN" {
 		return errNoAccess
 	}
 
@@ -429,8 +429,8 @@ func (s *FileService) DeletePermission(ctx context.Context, d DeletePermissionDa
 	return s.repo.Postgres.File.DeletePermission(ctx, d.ResourceID, d.UserToDeleteName)
 }
 
-func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*model.Permission, error) {
-	permissionsCache, err := redisrepo.GetMany[model.Permission](s.rdb, ctx, FilePermissionsPrefix(fileID))
+func (s *FileService) FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*string, error) {
+	permissionsCache, err := redisrepo.GetMany[string](s.rdb, ctx, FilePermissionsPrefix(fileID))
 	if err == nil {
 		return permissionsCache, nil
 	}

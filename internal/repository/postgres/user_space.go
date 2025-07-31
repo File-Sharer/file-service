@@ -20,7 +20,7 @@ func newUserSpaceRepo(db *pgxpool.Pool) UserSpace {
 }
 
 func (r *userSpaceRepo) Create(ctx context.Context, d model.UserSpace) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO users_spaces(user_id) VALUES($1)", d.UserID)
+	_, err := r.db.Exec(ctx, "INSERT INTO users_spaces(user_id, username) VALUES($1, $2)", d.UserID, d.Username)
 	return err
 }
 

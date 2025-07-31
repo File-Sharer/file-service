@@ -311,7 +311,7 @@ func (s *folderService) AddPermission(ctx context.Context, d AddPermissionData) 
 		return nil
 	}
 
-	if d.UserSpace.UserID != folder.CreatorID {
+	if d.UserSpace.UserID != folder.CreatorID && d.UserRole != "ADMIN" {
 		return errNoAccess
 	}
 
@@ -343,4 +343,27 @@ func (s *folderService) DeletePermission(ctx context.Context, d DeletePermission
 	}
 
 	return s.repo.Postgres.Folder.DeletePermission(ctx, folder.ID, d.UserToDeleteName)
+}
+
+func (s *folderService) GetPermissions(ctx context.Context, folderID, userID string) ([]*string, error) {
+	permissionsCache, err := redisrepo.GetMany[string](s.rdb, ctx, FolderPermissionsPrefix(folderID))
+	if err == nil {
+		return permissionsCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get folder(%s) permissions from redis: %s", folderID, err.Error())
+		return nil, errInternal
+	}
+
+	permissions, err := s.repo.Postgres.Folder.GetPermissions(ctx, folderID, userID)
+	if err != nil {
+		s.logger.Sugar().Errorf("faield to get folder(%s) permissions from postgres: %s", folderID, err.Error())
+		return nil, errInternal
+	}
+
+	if err := redisrepo.SetJSON(s.rdb, ctx, FolderPermissionsPrefix(folderID), permissions, time.Minute * 3); err != nil {
+		s.logger.Sugar().Errorf("failed to set folder(%s) permissions in redis: %s", folderID, err.Error())
+	}
+
+	return permissions, nil
 }

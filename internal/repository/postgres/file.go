@@ -81,21 +81,21 @@ func (r *fileRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *fileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID string) ([]*model.Permission, error) {
-	rows, err := r.db.Query(ctx, "SELECT p.file_id, p.user_id FROM file_permissions p JOIN files f ON f.id = p.file_id AND f.creator_id = $2 WHERE p.file_id = $1", id, creatorID)
+func (r *fileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID string) ([]*string, error) {
+	rows, err := r.db.Query(ctx, "SELECT p.username FROM file_permissions p JOIN files f ON f.id = p.file_id WHERE p.file_id = $1 AND f.creator_id = $2", id, creatorID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var permissions []*model.Permission
+	var permissions []*string
 	for rows.Next() {
-		var permission model.Permission
-		if err := rows.Scan(&permission.FileID, &permission.UserID); err != nil {
+		var username string
+		if err := rows.Scan(&username); err != nil {
 			return nil, err
 		}
 
-		permissions = append(permissions, &permission)
+		permissions = append(permissions, &username)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -106,6 +106,26 @@ func (r *fileRepo) FindPermissionsToFile(ctx context.Context, id, creatorID stri
 }
 
 func (r *fileRepo) TogglePublic(ctx context.Context, id, creatorID string) error {
-	_, err := r.db.Exec(ctx, "UPDATE files SET public = NOT public WHERE id = $1 AND creator_id = $2", id, creatorID)
-	return err
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var public bool
+	if err := tx.QueryRow(ctx, "UPDATE files SET public = NOT public WHERE id = $1 AND creator_id = $2 RETURNING public", id, creatorID).Scan(&public); err != nil {
+		return err
+	}
+
+	if public {
+		if _, err := tx.Exec(ctx, "DELETE FROM file_permissions WHERE file_id = $1", id); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
 }

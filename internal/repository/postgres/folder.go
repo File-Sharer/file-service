@@ -178,3 +178,30 @@ func (r *folderRepo) Delete(ctx context.Context, folderID, userID string) error 
 	_, err := r.db.Exec(ctx, "DELETE FROM folders WHERE id = $1 AND creator_id = $2", folderID, userID)
 	return err
 }
+
+func (r *folderRepo) GetPermissions(ctx context.Context, folderID, creatorID string) ([]*string, error) {
+	rows, err := r.db.Query(
+		ctx,
+		"SELECT p.username FROM folder_permissions p JOIN folders f ON f.id = p.folder_id WHERE p.folder_id = $1 AND f.creator_id = $2",
+		folderID, creatorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var permissions []*string
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, err
+		}
+		permissions = append(permissions, &username)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return permissions, nil
+}
