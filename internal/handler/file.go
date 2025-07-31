@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -97,7 +95,7 @@ func (h *Handler) filesDownload(c *gin.Context) {
 		return
 	}
 
-	f, err := h.getFileDownload(file.URL)
+	f, err := h.requestFileFromFileStorage(file.URL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -111,27 +109,6 @@ func (h *Handler) filesDownload(c *gin.Context) {
 
 	c.Header("filename", downloadFilename)
 	io.Copy(c.Writer, f)
-}
-
-func (h *Handler) getFileDownload(url string) (io.ReadCloser, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new request to file-storage: %s", err.Error())
-	}
-	req.Header.Set("X-Internal-Token", os.Getenv("X_INTERNAL_TOKEN"))
-
-	resp, err := h.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file from storage: %s", err.Error())
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("storage server responded with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return resp.Body, nil
 }
 
 func (h *Handler) filesAddPermission(c *gin.Context) {

@@ -13,16 +13,19 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
+	logger *zap.Logger
 	services *service.Service
 	hasherClient pb.HasherClient
 	httpClient *http.Client
 }
 
-func New(services *service.Service, hasherClient pb.HasherClient) *Handler {
+func New(logger *zap.Logger, services *service.Service, hasherClient pb.HasherClient) *Handler {
 	return &Handler{
+		logger: logger,
 		services: services,
 		hasherClient: hasherClient,
 		httpClient: &http.Client{},
@@ -59,6 +62,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			folders.GET("/:id/permissions", h.foldersGetPermissions)
 			folders.PUT("/:id/:username", h.foldersAddPermission)
 			folders.DELETE("/:id/:username", h.foldersDeletePermission)
+			folders.GET("/:id/dl", h.foldersGetZipped)
 		}
 
 		files := api.Group("/files")

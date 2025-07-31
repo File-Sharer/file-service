@@ -78,7 +78,7 @@ func main() {
 
 	repo := repository.New(db)
 	services := service.New(logger, repo, rabbitmq, hasherClient, rdb)
-	handlers := handler.New(services, hasherClient)
+	handlers := handler.New(logger, services, hasherClient)
 
 	services.StartAllWorkers(context.Background())
 

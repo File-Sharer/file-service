@@ -4,4 +4,5 @@ import "errors"
 
 var (
 	errNoToken = errors.New("no token")
+	errInternal = errors.New("internal server error")
 )

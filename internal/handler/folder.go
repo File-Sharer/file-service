@@ -1,17 +1,20 @@
 package handler
 
 import (
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
 type foldersCreateReq struct {
 	FolderID *string `json:"folderId"`
 	Name     string  `json:"name" binding:"required"`
-	Public   *bool   `json"isPublic"`
+	Public   bool   `json"isPublic"`
 }
 
 func (h *Handler) foldersCreate(c *gin.Context) {
@@ -27,7 +30,7 @@ func (h *Handler) foldersCreate(c *gin.Context) {
 		FolderID: input.FolderID,
 		CreatorID: userSpace.UserID,
 		Name: input.Name,
-		Public: input.Public,
+		Public: &input.Public,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
@@ -116,4 +119,35 @@ func (h *Handler) foldersDeletePermission(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil})
+}
+
+func (h *Handler) foldersGetZipped(c *gin.Context) {
+	userSpace := h.getUserSpace(c)
+	userRole := h.getUserRole(c)
+
+	folderID := c.Param("id")
+
+	folder, err := h.services.Folder.ProtectedFindByID(c.Request.Context(), folderID, *userRole, *userSpace)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+
+	parts := strings.Split(folder.URL, viper.GetString("fileStorage.origin") + "/files/")
+	if len(parts) != 2 {
+		h.logger.Sugar().Errorf("invalid folder(%s) URL: %v", folder.ID, parts)
+		return
+	}
+	path := parts[1]
+
+	f, err := h.requestZippedFolderFromFileStorage(path)
+	if err != nil {
+		h.logger.Error(err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": errInternal})
+		return
+	}
+	defer f.Close()
+
+	c.Header("filename", folder.Name)
+	io.Copy(c.Writer, f)
 }

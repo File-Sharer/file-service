@@ -50,7 +50,7 @@ func (s *folderService) Create(ctx context.Context, f model.Folder) (*model.Fold
 	}
 	f.ID = resp.GetHash()
 
-	path := fmt.Sprintf("files/%s/folders/%s", f.CreatorID, f.Name)
+	path := fmt.Sprintf("%s/folders/%s", f.CreatorID, f.Name)
 	if f.FolderID != nil {
 		f.Public = nil
 
@@ -70,11 +70,11 @@ func (s *folderService) Create(ctx context.Context, f model.Folder) (*model.Fold
 		}
 		f.Public = nil
 
-		path = strings.Split(parentFolder.URL, viper.GetString("fileStorage.origin") + "/")[1] + "/" + f.Name
+		path = strings.Split(parentFolder.URL, viper.GetString("fileStorage.origin") + "/files/")[1] + "/" + f.Name
 	}
 
 	f.CreatedAt = time.Now()
-	f.URL = fmt.Sprintf("%s/%s", viper.GetString("fileStorage.origin"), path)
+	f.URL = fmt.Sprintf("%s/files/%s", viper.GetString("fileStorage.origin"), path)
 
 	if err := s.repo.Postgres.Folder.Create(ctx, f); err != nil {
 		s.logger.Sugar().Errorf("failed to create folder for user(%s) in postgres: %s", f.CreatorID, err.Error())
