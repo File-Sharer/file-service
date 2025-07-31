@@ -23,7 +23,7 @@ type UserSpace interface {
 type Folder interface {
 	Create(ctx context.Context, f model.Folder) (*model.Folder, error)
 	findByID(ctx context.Context, id string) (*model.Folder, error)
-	hasPermission(ctx context.Context, id, userID string) (bool, error)
+	hasPermission(ctx context.Context, id, username string) (bool, error)
 	ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.Folder, error)
 	Rename(ctx context.Context, id, userID, newName string) error
 	GetFolderContents(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.FolderContents, error)

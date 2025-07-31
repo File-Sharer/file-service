@@ -175,7 +175,7 @@ func (s *folderService) ProtectedFindByID(ctx context.Context, id, userRole stri
 		return folder, nil
 	}
 
-	permission, err := s.hasPermission(ctx, id, userSpace.UserID)
+	permission, err := s.hasPermission(ctx, id, userSpace.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -187,24 +187,24 @@ func (s *folderService) ProtectedFindByID(ctx context.Context, id, userRole stri
 	return nil, errNoAccess
 }
 
-func (s *folderService) hasPermission(ctx context.Context, id, userID string) (bool, error) {
-	permissionCache, err := s.rdb.Get(ctx, FolderPermissionPrefix(id, userID)).Bool()
+func (s *folderService) hasPermission(ctx context.Context, id, username string) (bool, error) {
+	permissionCache, err := s.rdb.Get(ctx, FolderPermissionPrefix(id, username)).Bool()
 	if err == nil {
 		return permissionCache, nil
 	}
 	if err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get folder(%s) permission for user(%s) from redis: %s", id, userID, err.Error())
+		s.logger.Sugar().Errorf("failed to get folder(%s) permission for user(%s) from redis: %s", id, username, err.Error())
 		return false, errInternal
 	}
 
-	permission, err := s.repo.Postgres.Folder.HasPermission(ctx, id, userID)
+	permission, err := s.repo.Postgres.Folder.HasPermission(ctx, id, username)
 	if err != nil {
-		s.logger.Sugar().Errorf("failed to find folder(%s) permisson for user(%s) in postgres: %s", id, userID, err.Error())
+		s.logger.Sugar().Errorf("failed to find folder(%s) permisson for user(%s) in postgres: %s", id, username, err.Error())
 		return false, errInternal
 	}
 
-	if err := s.rdb.Set(ctx, FolderPermissionPrefix(id, userID), permission, time.Minute).Err(); err != nil {
-		s.logger.Sugar().Errorf("failed to set folder(%s) permission for user(%s) in redis: %s", id, userID, err.Error())
+	if err := s.rdb.Set(ctx, FolderPermissionPrefix(id, username), permission, time.Minute).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to set folder(%s) permission for user(%s) in redis: %s", id, username, err.Error())
 	}
 
 	return permission, nil

@@ -62,7 +62,7 @@ func (r *fileRepo) HasPermission(ctx context.Context, fileID, username string) (
 	exists := false
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT EXISTS(SELECT 1 FROM file_permissions WHERE file_id = $1 AND username = $2)",
+		"SELECT EXISTS(SELECT 1 FROM file_permissions p JOIN files f ON f.id = p.file_id WHERE p.file_id = $1 AND p.username = $2 AND f.main_folder_id IS NULL)",
 		fileID, username,
 		).Scan(&exists); err != nil {
 		return false, err

@@ -237,7 +237,7 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole st
 		return file, nil
 	}
 
-	permission, err := s.HasPermission(ctx, fileID, userSpace.UserID)
+	permission, err := s.HasPermission(ctx, fileID, userSpace.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +293,8 @@ func (s *FileService) FindUserFiles(ctx context.Context, userID string) ([]*mode
 	return files, nil
 }
 
-func (s *FileService) HasPermission(ctx context.Context, fileID string, userID string) (bool, error) {
-	permissionCache, err := s.rdb.Get(ctx, FilePermissionPrefix(fileID, userID)).Bool()
+func (s *FileService) HasPermission(ctx context.Context, fileID, username string) (bool, error) {
+	permissionCache, err := s.rdb.Get(ctx, FilePermissionPrefix(fileID, username)).Bool()
 	if err == nil {
 		return permissionCache, nil
 	}
@@ -302,13 +302,13 @@ func (s *FileService) HasPermission(ctx context.Context, fileID string, userID s
 		return false, err
 	}
 
-	hasPermission, err := s.repo.Postgres.File.HasPermission(ctx, fileID, userID)
+	hasPermission, err := s.repo.Postgres.File.HasPermission(ctx, fileID, username)
 	if err != nil {
-		s.logger.Sugar().Errorf("failed to get if user(%s) has permission to file(%s) from postgres: %s", userID, fileID, err.Error())
+		s.logger.Sugar().Errorf("failed to get if user(%s) has permission to file(%s) from postgres: %s", username, fileID, err.Error())
 		return false, err
 	}
 
-	if err := s.rdb.Set(ctx, FilePermissionPrefix(fileID, userID), hasPermission, time.Minute).Err(); err != nil {
+	if err := s.rdb.Set(ctx, FilePermissionPrefix(fileID, username), hasPermission, time.Minute).Err(); err != nil {
 		return false, err
 	}
 
