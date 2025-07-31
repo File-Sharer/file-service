@@ -31,15 +31,15 @@ func (h *Handler) filesCreate(c *gin.Context) {
 		return
 	}
 
-	downloadFilename := strings.TrimSpace(c.PostForm("downloadFilename"))
-	if downloadFilename == "" && folderID == "" {
+	downloadName := strings.TrimSpace(c.PostForm("downloadName"))
+	if downloadName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "download filename is required"})
 		return
 	}
 
 	fileObj.CreatorID = userSpace.UserID
 	fileObj.Public = &isPublic
-	fileObj.DownloadFilename = &downloadFilename
+	fileObj.DownloadName = downloadName
 
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
@@ -101,13 +101,8 @@ func (h *Handler) filesDownload(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	
-	downloadFilename := file.Filename
-	if file.DownloadFilename != nil {
-		downloadFilename = *file.DownloadFilename
-	}
 
-	c.Header("filename", downloadFilename)
+	c.Header("filename", file.DownloadName)
 	io.Copy(c.Writer, f)
 }
 

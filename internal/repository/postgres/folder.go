@@ -205,3 +205,16 @@ func (r *folderRepo) GetPermissions(ctx context.Context, folderID, creatorID str
 
 	return permissions, nil
 }
+
+func (r *folderRepo) HasFile(ctx context.Context, folderID, filename string) (bool, error) {
+	var exists bool
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT EXISTS(SELECT 1 FROM files WHERE folder_id = $1 AND filename = $2)",
+		folderID, filename,
+	).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}

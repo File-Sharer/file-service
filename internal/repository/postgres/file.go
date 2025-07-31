@@ -16,13 +16,13 @@ func newFileRepo(db *pgxpool.Pool) File {
 }
 
 func (r *fileRepo) Create(ctx context.Context, file *model.File) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO files(id, main_folder_id, folder_id, creator_id, size, url, public, filename, download_filename) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)", file.ID, file.MainFolderID, file.FolderID, file.CreatorID, file.Size, file.URL, file.Public, file.Filename, file.DownloadFilename)
+	_, err := r.db.Exec(ctx, "INSERT INTO files(id, main_folder_id, folder_id, creator_id, size, url, public, filename, download_name) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)", file.ID, file.MainFolderID, file.FolderID, file.CreatorID, file.Size, file.URL, file.Public, file.Filename, file.DownloadName)
 	return err
 }
 
 func (r *fileRepo) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var file model.File
-	if err := r.db.QueryRow(ctx, "SELECT id, main_folder_id, creator_id, size, url, public, filename, download_filename, date_added FROM files WHERE id = $1 AND main_folder_id IS NULL", id).Scan(&file.ID, &file.MainFolderID, &file.CreatorID, &file.Size, &file.URL, &file.Public, &file.Filename, &file.DownloadFilename, &file.DateAdded); err != nil  {
+	if err := r.db.QueryRow(ctx, "SELECT id, main_folder_id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE id = $1 AND main_folder_id IS NULL", id).Scan(&file.ID, &file.MainFolderID, &file.CreatorID, &file.Size, &file.URL, &file.Public, &file.Filename, &file.DownloadName, &file.DateAdded); err != nil  {
 		return nil, err
 	}
 
@@ -30,7 +30,7 @@ func (r *fileRepo) FindByID(ctx context.Context, id string) (*model.File, error)
 }
 
 func (r *fileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.File, error) {
-	rows, err := r.db.Query(ctx, "SELECT id, creator_id, size, url, public, filename, download_filename, date_added FROM files WHERE creator_id = $1 AND main_folder_id IS NULL", userID)
+	rows, err := r.db.Query(ctx, "SELECT id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE creator_id = $1 AND main_folder_id IS NULL", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (r *fileRepo) FindUserFiles(ctx context.Context, userID string) ([]*model.F
 	var files []*model.File
 	for rows.Next() {
 		var f model.File
-		if err := rows.Scan(&f.ID, &f.CreatorID, &f.Size, &f.URL, &f.Public, &f.Filename, &f.DownloadFilename, &f.DateAdded); err != nil {
+		if err := rows.Scan(&f.ID, &f.CreatorID, &f.Size, &f.URL, &f.Public, &f.Filename, &f.DownloadName, &f.DateAdded); err != nil {
 			return nil, err
 		}
 

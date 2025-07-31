@@ -17,6 +17,7 @@ import (
 	"github.com/File-Sharer/file-service/internal/model"
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/File-Sharer/file-service/internal/repository/redisrepo"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
@@ -81,20 +82,15 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	fileObj.DateAdded = time.Now()
 
 	// Validating file extension
-	downloadFilenameExt := filepath.Ext(*fileObj.DownloadFilename)
-	if downloadFilenameExt == "" || downloadFilenameExt != ext {
-		*fileObj.DownloadFilename += ext
+	downloadNameExt := filepath.Ext(fileObj.DownloadName)
+	if downloadNameExt == "" || downloadNameExt != ext {
+		fileObj.DownloadName += ext
 	}
+	fileObj.Filename = new(string)
 
 	// Sending user to timeout
 	if err := s.rdb.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) to timeout in redis: %s", fileObj.CreatorID, err.Error())
-		return nil, errInternal
-	}
-
-	// Clear cache
-	if err := s.rdb.Del(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)).Err(); err != nil {
-		s.logger.Sugar().Errorf("failed to clear user(%s) files cache in redis: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
 
@@ -115,11 +111,23 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 			*fileObj.MainFolderID = folder.ID
 		}
 
-		fileObj.DownloadFilename = nil
+		hasFile, err := s.folderService.hasFile(ctx, folder.ID, fileObj.DownloadName)
+		if err != nil {
+			return nil, err
+		}
+		if hasFile {
+			return nil, errTheFileWithThatNameAlreadyExists
+		}
+
 		fileObj.Public = nil
+		*fileObj.Filename = fileObj.DownloadName
+		fileHeader.Filename = fileObj.DownloadName
 
 		sep := fmt.Sprintf("%s/files/%s/folders/", viper.GetString("fileStorage.origin"), fileObj.CreatorID)
 		path = fmt.Sprintf("%s/folders/%s", fileObj.CreatorID, strings.Split(folder.URL, sep)[1])
+	} else {
+		*fileObj.Filename = uuid.NewString()
+		fileHeader.Filename = *fileObj.Filename
 	}
 
 	fileSize, fileURL, err := s.saveToFileStorage(path, file, fileHeader)
@@ -129,12 +137,15 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	}
 	fileObj.Size = fileSize
 	fileObj.URL = fileURL
-	parts := strings.Split(fileURL, "/")
-	fileObj.Filename = parts[len(parts)-1]
 
 	if err := s.repo.Postgres.File.Create(ctx, &fileObj); err != nil {
 		s.logger.Sugar().Errorf("failed to create file by user(%s) in postgres: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
+	}
+
+	// Clear cache
+	if err := s.rdb.Del(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to clear user(%s) files cache in redis: %s", fileObj.CreatorID, err.Error())
 	}
 
 	return &fileObj, err
@@ -367,7 +378,7 @@ func (s *FileService) Delete(ctx context.Context, fileID, userRole string, userS
 		return errNoAccess
 	}
 	
-	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", userSpace.UserID, file.Filename)}); err != nil {
+	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", userSpace.UserID, file.DownloadName)}); err != nil {
 		s.logger.Error(err.Error())
 		return errInternal
 	}

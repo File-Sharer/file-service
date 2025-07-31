@@ -31,6 +31,7 @@ type Folder interface {
 	AddPermission(ctx context.Context, d AddPermissionData) error
 	DeletePermission(ctx context.Context, d DeletePermissionData) error
 	GetPermissions(ctx context.Context, folderID, userID string) ([]*string, error)
+	hasFile(ctx context.Context, folderID, filename string) (bool, error)
 }
 
 type File interface {

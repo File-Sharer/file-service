@@ -42,6 +42,29 @@ func newFolderService(logger *zap.Logger, repo *repository.Repository, hasher pb
 	}
 }
 
+func (s *folderService) hasFile(ctx context.Context, folderID, filename string) (bool, error) {
+	existsCache, err := s.rdb.Get(ctx, HasFilePrefix(folderID, filename)).Bool()
+	if err == nil {
+		return existsCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get if file(%s) exists in folder(%s) from redis: %s", filename, folderID, err.Error())
+		return false, errInternal
+	}
+
+	exists, err := s.repo.Postgres.Folder.HasFile(ctx, folderID, filename)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get if file(%s) exists in folder(%s) from postgres: %s", filename, folderID, err.Error())
+		return false, errInternal
+	}
+
+	if err := s.rdb.Set(ctx, HasFilePrefix(folderID, filename), exists, time.Minute).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to set has-file(%s) in folder(%s) value in redis: %s", filename, folderID, err.Error())
+	}
+	
+	return exists, nil
+}
+
 func (s *folderService) Create(ctx context.Context, f model.Folder) (*model.Folder, error) {
 	resp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: f.CreatorID})
 	if err != nil || !resp.Ok {

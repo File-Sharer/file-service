@@ -12,4 +12,5 @@ var (
 	errCantAddPermissionForYourself = errors.New("you cannot add permission to yourself")
 	errFailedToUploadFileToFileStorage = errors.New("failed to upload file to file storage")
 	errYouDoNotHaveEnoughSpace = errors.New("you don not have enough space")
+	errTheFileWithThatNameAlreadyExists = errors.New("the file with that name already exists")
 )
