@@ -16,6 +16,7 @@ import (
 	"github.com/File-Sharer/file-service/internal/repository"
 	"github.com/File-Sharer/file-service/internal/repository/redisrepo"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -324,7 +325,18 @@ func (s *folderService) AddPermission(ctx context.Context, d AddPermissionData) 
 		return err
 	}
 
-	return s.repo.Postgres.Folder.AddPermission(ctx, d.ResourceID, d.UserToAddName)
+	if err := s.repo.Postgres.Folder.AddPermission(ctx, d.ResourceID, d.UserToAddName); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok {
+			if pgErr.Code == "23503" {
+				return errUserNotFound
+			}
+		}
+		
+		s.logger.Sugar().Errorf("failed to add permisson to folder(%s) to user(%s) in postgres: %s", d.ResourceID, d.UserToAddName, err.Error())
+		return errInternal
+	}
+
+	return nil
 }
 
 func (s *folderService) DeletePermission(ctx context.Context, d DeletePermissionData) error {
