@@ -16,7 +16,6 @@ var (
 	folderContentsPrefix = "folder-contents:%s" // <folderID>
 	userFoldersPrefix = "user-folders:%s" // <userID>
 	spaceByUsernamePrefix = "space-by-username:%s" // <username>
-	hasFilePrefix = "has-file:%s:%s" // <folderID>:<filename>
 )
 
 func FilePrefix(fileID string) string {
@@ -69,8 +68,4 @@ func UserFoldersPrefix(userID string) string {
 
 func SpaceByUsernamePrefix(username string) string {
 	return fmt.Sprintf(spaceByUsernamePrefix, username)
-}
-
-func HasFilePrefix(folderID, filename string) string {
-	return fmt.Sprintf(hasFilePrefix, folderID, filename)
 }

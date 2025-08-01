@@ -70,6 +70,12 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	if spaceSize + fileHeader.Size > levelSpaceSizes[space.Level].maxSpaceSize {
 		return nil, errYouDoNotHaveEnoughSpace
 	}
+
+	// Sending user to timeout
+	if err := s.rdb.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s) to timeout in redis: %s", fileObj.CreatorID, err.Error())
+		return nil, errInternal
+	}
 	
 	fileHashIDResp, err := s.hasher.Hash(ctx, &pb.HashReq{BaseString: fileObj.CreatorID})
 	if !fileHashIDResp.GetOk() {
@@ -79,7 +85,6 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	fileObj.ID = fileHashIDResp.GetHash()
 
 	ext := filepath.Ext(fileHeader.Filename)
-	fileObj.DateAdded = time.Now()
 
 	// Validating file extension
 	downloadNameExt := filepath.Ext(fileObj.DownloadName)
@@ -87,12 +92,6 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		fileObj.DownloadName += ext
 	}
 	fileObj.Filename = new(string)
-
-	// Sending user to timeout
-	if err := s.rdb.Set(ctx, FileCreateDelayPrefix(fileObj.CreatorID), 1, time.Minute * 2).Err(); err != nil {
-		s.logger.Sugar().Errorf("failed to set user(%s) to timeout in redis: %s", fileObj.CreatorID, err.Error())
-		return nil, errInternal
-	}
 
 	path := fileObj.CreatorID
 	if fileObj.FolderID != nil {
@@ -120,16 +119,16 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		}
 
 		fileObj.Public = nil
-		*fileObj.Filename = fileObj.DownloadName
+		fileObj.Filename = nil
 		fileHeader.Filename = fileObj.DownloadName
 
 		sep := fmt.Sprintf("%s/files/%s/folders/", viper.GetString("fileStorage.origin"), fileObj.CreatorID)
 		path = fmt.Sprintf("%s/folders/%s", fileObj.CreatorID, strings.Split(folder.URL, sep)[1])
 	} else {
-		*fileObj.Filename = uuid.NewString()
+		*fileObj.Filename = uuid.NewString() + filepath.Ext(fileObj.DownloadName)
 		fileHeader.Filename = *fileObj.Filename
 	}
-
+	
 	fileSize, fileURL, err := s.saveToFileStorage(path, file, fileHeader)
 	if err != nil {
 		s.logger.Error(err.Error())
@@ -142,6 +141,7 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 		s.logger.Sugar().Errorf("failed to create file by user(%s) in postgres: %s", fileObj.CreatorID, err.Error())
 		return nil, errInternal
 	}
+	fileObj.DateAdded = time.Now()
 
 	// Clear cache
 	if err := s.rdb.Del(ctx, UserFilesPrefix(fileObj.CreatorID), SpaceSizePrefix(fileObj.CreatorID)).Err(); err != nil {

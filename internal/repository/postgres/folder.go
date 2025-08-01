@@ -210,8 +210,34 @@ func (r *folderRepo) HasFile(ctx context.Context, folderID, filename string) (bo
 	var exists bool
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT EXISTS(SELECT 1 FROM files WHERE folder_id = $1 AND filename = $2)",
+		"SELECT EXISTS(SELECT 1 FROM files WHERE folder_id = $1 AND download_name = $2)",
 		folderID, filename,
+	).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (r *folderRepo) HasFolder(ctx context.Context, userID string, folderName string) (bool, error) {
+	var exists bool
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT EXISTS(SELECT 1 FROM folders WHERE creator_id = $1 AND name = $2)",
+		userID, folderName,
+	).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (r *folderRepo) HasFolderInFolder(ctx context.Context, folderName, folderID string) (bool, error) {
+	var exists bool
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT EXISTS(SELECT 1 FROM folders WHERE folder_id = $1 AND name = $2)",
+		folderID, folderName,
 	).Scan(&exists); err != nil {
 		return false, err
 	}

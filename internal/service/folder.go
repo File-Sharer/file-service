@@ -43,23 +43,30 @@ func newFolderService(logger *zap.Logger, repo *repository.Repository, hasher pb
 }
 
 func (s *folderService) hasFile(ctx context.Context, folderID, filename string) (bool, error) {
-	existsCache, err := s.rdb.Get(ctx, HasFilePrefix(folderID, filename)).Bool()
-	if err == nil {
-		return existsCache, nil
-	}
-	if err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get if file(%s) exists in folder(%s) from redis: %s", filename, folderID, err.Error())
-		return false, errInternal
-	}
-
 	exists, err := s.repo.Postgres.Folder.HasFile(ctx, folderID, filename)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to get if file(%s) exists in folder(%s) from postgres: %s", filename, folderID, err.Error())
 		return false, errInternal
 	}
+	
+	return exists, nil
+}
 
-	if err := s.rdb.Set(ctx, HasFilePrefix(folderID, filename), exists, time.Minute).Err(); err != nil {
-		s.logger.Sugar().Errorf("failed to set has-file(%s) in folder(%s) value in redis: %s", filename, folderID, err.Error())
+func (s *folderService) hasFolder(ctx context.Context, userID string, folderName string) (bool, error) {
+	exists, err := s.repo.Postgres.Folder.HasFolder(ctx, userID, folderName)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get if folder(%s) exists in user(%s) space from postgres: %s", folderName, userID, err.Error())
+		return false, errInternal
+	}
+	
+	return exists, nil
+}
+
+func (s *folderService) hasFolderInFolder(ctx context.Context, folderName, folderID string) (bool, error) {
+	exists, err := s.repo.Postgres.Folder.HasFolderInFolder(ctx, folderName, folderID)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get if folder(%s) exists in folder(%s) from postgres: %s", folderName, folderID, err.Error())
+		return false, errInternal
 	}
 	
 	return exists, nil
@@ -91,9 +98,26 @@ func (s *folderService) Create(ctx context.Context, f model.Folder) (*model.Fold
 		} else {
 			*f.MainFolderID = *parentFolder.MainFolderID
 		}
+
+		hasFolder, err := s.hasFolderInFolder(ctx, parentFolder.ID, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if hasFolder {
+			return nil, errTheFolderWithThatNameAlreadyExists
+		}
+
 		f.Public = nil
 
 		path = strings.Split(parentFolder.URL, viper.GetString("fileStorage.origin") + "/files/")[1] + "/" + f.Name
+	} else {
+		hasFolder, err := s.hasFolder(ctx, f.CreatorID, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if hasFolder {
+			return nil, errTheFolderWithThatNameAlreadyExists
+		}
 	}
 
 	f.CreatedAt = time.Now()
