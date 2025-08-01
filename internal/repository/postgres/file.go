@@ -22,7 +22,20 @@ func (r *fileRepo) Create(ctx context.Context, file *model.File) error {
 
 func (r *fileRepo) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var file model.File
-	if err := r.db.QueryRow(ctx, "SELECT id, main_folder_id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE id = $1 AND main_folder_id IS NULL", id).Scan(&file.ID, &file.MainFolderID, &file.CreatorID, &file.Size, &file.URL, &file.Public, &file.Filename, &file.DownloadName, &file.DateAdded); err != nil  {
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT id, main_folder_id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE id = $1 AND main_folder_id IS NULL",
+		id).Scan(
+			&file.ID,
+			&file.MainFolderID,
+			&file.CreatorID,
+			&file.Size,
+			&file.URL,
+			&file.Public,
+			&file.Filename,
+			&file.DownloadName,
+			&file.DateAdded,
+			); err != nil  {
 		return nil, err
 	}
 

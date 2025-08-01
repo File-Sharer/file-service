@@ -225,7 +225,7 @@ type uploadResponse struct {
 func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) (*model.File, error) {
 	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
-		return nil, errInternal
+		return nil, err
 	}
 
 	if file.MainFolderID != nil {
@@ -271,6 +271,9 @@ func (s *FileService) FindByID(ctx context.Context, id string) (*model.File, err
 
 	file, err := s.repo.Postgres.File.FindByID(ctx, id)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errFileNotFound
+		}
 		return nil, err
 	}
 
@@ -377,8 +380,16 @@ func (s *FileService) Delete(ctx context.Context, fileID, userRole string, userS
 	if file.CreatorID != userSpace.UserID && userRole != "ADMIN" {
 		return errNoAccess
 	}
+
+	sep := fmt.Sprintf("%s/files/", viper.GetString("fileStorage.origin"))
+	parts := strings.Split(file.URL, sep)
+	if len(parts) < 2 {
+		s.logger.Sugar().Errorf("incorrect url(%s) for file(%s)", file.URL, file.ID)
+		return errInternal
+	}
+	path := parts[1]
 	
-	if err := s.deleteFiles([]string{fmt.Sprintf("%s/%s", userSpace.UserID, file.DownloadName)}); err != nil {
+	if err := s.deleteFiles([]string{path}); err != nil {
 		s.logger.Error(err.Error())
 		return errInternal
 	}
