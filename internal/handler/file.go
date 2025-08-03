@@ -91,7 +91,7 @@ func (h *Handler) filesDownload(c *gin.Context) {
 
 	file, err := h.services.File.ProtectedFindByID(c.Request.Context(), fileID, *userRole, *userSpace)
 	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"ok": false, "error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 

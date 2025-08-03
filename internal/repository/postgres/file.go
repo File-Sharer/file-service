@@ -24,7 +24,7 @@ func (r *fileRepo) FindByID(ctx context.Context, id string) (*model.File, error)
 	var file model.File
 	if err := r.db.QueryRow(
 		ctx,
-		"SELECT id, main_folder_id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE id = $1 AND main_folder_id IS NULL",
+		"SELECT id, main_folder_id, creator_id, size, url, public, filename, download_name, date_added FROM files WHERE id = $1",
 		id).Scan(
 			&file.ID,
 			&file.MainFolderID,

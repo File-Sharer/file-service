@@ -48,6 +48,10 @@ func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClien
 }
 
 func (s *FileService) Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
+	if fileHeader.Size == 0 {
+		return nil, errFileHasNoData
+	}
+	
 	// Checking user creating files delay
 	delay := s.rdb.Get(ctx, FileCreateDelayPrefix(fileObj.CreatorID))
 	if delay.Err() != redis.Nil {
@@ -228,18 +232,6 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole st
 		return nil, err
 	}
 
-	if file.MainFolderID != nil {
-		hasPermission, err := s.folderService.hasPermission(ctx, *file.MainFolderID, userSpace.UserID)
-		if err != nil {
-			return nil, err
-		}
-		if hasPermission {
-			return file, nil
-		}
-
-		return nil, errNoAccess
-	}
-
 	if file.CreatorID == userSpace.UserID || userRole == "ADMIN" {
 		return file, nil
 	}
@@ -255,6 +247,18 @@ func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole st
 
 	if permission {
 		return file, nil
+	}
+
+	if file.MainFolderID != nil {
+		hasPermission, err := s.folderService.hasPermission(ctx, *file.MainFolderID, userSpace.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if hasPermission {
+			return file, nil
+		}
+
+		return nil, errNoAccess
 	}
 
 	return nil, errNoAccess

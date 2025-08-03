@@ -14,4 +14,5 @@ var (
 	errYouDoNotHaveEnoughSpace = errors.New("you don not have enough space")
 	errTheFileWithThatNameAlreadyExists = errors.New("the file with that name already exists")
 	errTheFolderWithThatNameAlreadyExists = errors.New("the folder with that name already exists")
+	errFileHasNoData = errors.New("file has no data")
 )
