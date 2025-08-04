@@ -24,13 +24,32 @@ func (r *userSpaceRepo) Create(ctx context.Context, d model.UserSpace) error {
 	return err
 }
 
-func (r *userSpaceRepo) GetByID(ctx context.Context, userID string) (*model.UserSpace, error) {
+func (r *userSpaceRepo) GetByUserID(ctx context.Context, userID string) (*model.UserSpace, error) {
 	space := new(model.UserSpace)
 	if err := r.db.QueryRow(
 		ctx,
 		"SELECT user_id, username, level, created_at FROM users_spaces WHERE user_id = $1",
 		userID,
 	).Scan(&space.UserID, &space.Username, &space.Level, &space.CreatedAt); err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
+
+	return space, nil
+}
+
+func (r *userSpaceRepo) GetFull(ctx context.Context, userID string) (*model.FullUserSpace, error) {
+	space := new(model.FullUserSpace)
+	if err := r.db.QueryRow(
+		ctx,
+		`
+		SELECT s.user_id, s.username, s.level, s.created_at, SUM(f.size)
+		FROM users_spaces s
+		LEFT JOIN files f ON f.creator_id = s.user_id
+		WHERE s.user_id = $1
+		GROUP BY s.user_id, s.username, s.level, s.created_at
+		`,
+		userID,
+	).Scan(&space.UserID, &space.Username, &space.Level, &space.CreatedAt, &space.Size); err != nil && err != pgx.ErrNoRows {
 		return nil, err
 	}
 

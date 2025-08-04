@@ -97,7 +97,7 @@ func (h *Handler) getToken(c *gin.Context) (string, error) {
 	return token, nil
 }
 
-func (h *Handler) getUserDataFromToken(ctx context.Context, token string) (*model.UserSpace, string, error) {
+func (h *Handler) getUserDataFromToken(ctx context.Context, token string) (*model.FullUserSpace, string, error) {
 	decoded, err := h.hasherClient.DecodeJWT(context.Background(), &pb.DecodeJWTReq{Secret: os.Getenv("HASHER_SECRET"), Jwt: token})
 	if err != nil {
 		return nil, "", err
@@ -111,13 +111,13 @@ func (h *Handler) getUserDataFromToken(ctx context.Context, token string) (*mode
 	return userSpace, decoded.Role, nil
 }
 
-func (h *Handler) getUserSpace(c *gin.Context) *model.UserSpace {
+func (h *Handler) getUserSpace(c *gin.Context) *model.FullUserSpace {
 	userSpaceReq, ok := c.Get("user-space")
 	if !ok {
 		return nil
 	}
 
-	userSpace, ok := userSpaceReq.(model.UserSpace)
+	userSpace, ok := userSpaceReq.(model.FullUserSpace)
 	if !ok {
 		return nil
 	}

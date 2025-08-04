@@ -47,7 +47,7 @@ func NewFileService(logger *zap.Logger, repo *repository.Repository, hasherClien
 	}
 }
 
-func (s *FileService) Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
+func (s *FileService) Create(ctx context.Context, userSpace model.FullUserSpace, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error) {
 	if fileHeader.Size == 0 {
 		return nil, errFileHasNoData
 	}
@@ -57,21 +57,12 @@ func (s *FileService) Create(ctx context.Context, fileObj model.File, file multi
 	if delay.Err() != redis.Nil {
 		return nil, errWaitDelay
 	}
-
-	space, err := s.userSpaceService.Get(ctx, fileObj.CreatorID)
-	if err != nil {
-		return nil, err
-	}
 	
-	if fileHeader.Size > levelSpaceSizes[space.Level].maxFileSize {
+	if fileHeader.Size > levelSpaceSizes[userSpace.Level].maxFileSize {
 		return nil, errFileIsTooBig
 	}
-	
-	spaceSize, err := s.userSpaceService.GetSize(ctx, fileObj.CreatorID)
-	if err != nil {
-		return nil, err
-	}
-	if spaceSize + fileHeader.Size > levelSpaceSizes[space.Level].maxSpaceSize {
+
+	if userSpace.Size + fileHeader.Size > levelSpaceSizes[userSpace.Level].maxSpaceSize {
 		return nil, errYouDoNotHaveEnoughSpace
 	}
 
@@ -226,7 +217,7 @@ type uploadResponse struct {
 	FileSize int64  `json:"file_size"`
 }
 
-func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) (*model.File, error) {
+func (s *FileService) ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.FullUserSpace) (*model.File, error) {
 	file, err := s.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, err
@@ -371,7 +362,7 @@ func (s *FileService) AddPermission(ctx context.Context, d AddPermissionData) er
 	return nil
 }
 
-func (s *FileService) Delete(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) error {
+func (s *FileService) Delete(ctx context.Context, fileID, userRole string, userSpace model.FullUserSpace) error {
 	file, err := s.ProtectedFindByID(ctx, fileID, userRole, userSpace)
 	if err != nil {
 		if err == pgx.ErrNoRows {

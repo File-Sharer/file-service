@@ -29,8 +29,8 @@ func newUserSpaceService(logger *zap.Logger, repo *repository.Repository, rabbit
 	}
 }
 
-func (s *userSpaceService) Get(ctx context.Context, userID string) (*model.UserSpace, error) {
-	spaceCache, err := redisrepo.Get[model.UserSpace](s.rdb, ctx, SpacePrefix(userID))
+func (s *userSpaceService) Get(ctx context.Context, userID string) (*model.FullUserSpace, error) {
+	spaceCache, err := redisrepo.Get[model.FullUserSpace](s.rdb, ctx, SpacePrefix(userID))
 	if err == nil {
 		return spaceCache, nil
 	}
@@ -39,7 +39,7 @@ func (s *userSpaceService) Get(ctx context.Context, userID string) (*model.UserS
 		return nil, errInternal
 	}
 
-	space, err := s.repo.Postgres.UserSpace.GetByID(ctx, userID)
+	space, err := s.repo.Postgres.UserSpace.GetFull(ctx, userID)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to get user(%s) space from postgres: %s", userID, err.Error())
 		return nil, errInternal

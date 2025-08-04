@@ -29,11 +29,5 @@ func (h *Handler) usersSpacesUpdateLevel(c *gin.Context) {
 func (h *Handler) usersSpacesGetLevel(c *gin.Context) {
 	userSpace := h.getUserSpace(c)
 
-	level, err := h.services.UserSpace.Get(c.Request.Context(), userSpace.UserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "level": level.Level})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "level": userSpace.Level})
 }

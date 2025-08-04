@@ -204,7 +204,7 @@ func (s *folderService) findByID(ctx context.Context, id string) (*model.Folder,
 	return folder, nil
 }
 
-func (s *folderService) ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.Folder, error) {
+func (s *folderService) ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.FullUserSpace) (*model.Folder, error) {
 	folder, err := s.findByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func (s *folderService) Rename(ctx context.Context, id, userID, newName string) 
 	return nil
 }
 
-func (s *folderService) GetFolderContents(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.FolderContents, error) {
+func (s *folderService) GetFolderContents(ctx context.Context, id, userRole string, userSpace model.FullUserSpace) (*model.FolderContents, error) {
 	folder, err := s.findByID(ctx, id)
 	if err != nil {
 		return nil, err

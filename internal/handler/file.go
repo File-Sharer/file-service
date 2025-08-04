@@ -47,7 +47,7 @@ func (h *Handler) filesCreate(c *gin.Context) {
 		return
 	}
 
-	createdFile, err := h.services.File.Create(c.Request.Context(), fileObj, file, fileHeader)
+	createdFile, err := h.services.File.Create(c.Request.Context(), *userSpace, fileObj, file, fileHeader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error()})
 		return

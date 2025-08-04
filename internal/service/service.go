@@ -13,7 +13,7 @@ import (
 )
 
 type UserSpace interface {
-	Get(ctx context.Context, userID string) (*model.UserSpace, error)
+	Get(ctx context.Context, userID string) (*model.FullUserSpace, error)
 	GetSize(ctx context.Context, userID string) (int64, error)
 	StartCreatingUsersSpaces(ctx context.Context)
 	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
@@ -24,9 +24,9 @@ type Folder interface {
 	Create(ctx context.Context, f model.Folder) (*model.Folder, error)
 	findByID(ctx context.Context, id string) (*model.Folder, error)
 	hasPermission(ctx context.Context, id, username string) (bool, error)
-	ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.Folder, error)
+	ProtectedFindByID(ctx context.Context, id, userRole string, userSpace model.FullUserSpace) (*model.Folder, error)
 	Rename(ctx context.Context, id, userID, newName string) error
-	GetFolderContents(ctx context.Context, id, userRole string, userSpace model.UserSpace) (*model.FolderContents, error)
+	GetFolderContents(ctx context.Context, id, userRole string, userSpace model.FullUserSpace) (*model.FolderContents, error)
 	GetUserFolders(ctx context.Context, userID string) ([]*model.Folder, error)
 	AddPermission(ctx context.Context, d AddPermissionData) error
 	DeletePermission(ctx context.Context, d DeletePermissionData) error
@@ -35,12 +35,12 @@ type Folder interface {
 }
 
 type File interface {
-	Create(ctx context.Context, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error)
-	ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) (*model.File, error)
+	Create(ctx context.Context, userSpace model.FullUserSpace, fileObj model.File, file multipart.File, fileHeader *multipart.FileHeader) (*model.File, error)
+	ProtectedFindByID(ctx context.Context, fileID, userRole string, userSpace model.FullUserSpace) (*model.File, error)
 	FindByID(ctx context.Context, id string) (*model.File, error)
 	FindUserFiles(ctx context.Context, userID string) ([]*model.File, error)
 	AddPermission(ctx context.Context, d AddPermissionData) error
-	Delete(ctx context.Context, fileID, userRole string, userSpace model.UserSpace) error
+	Delete(ctx context.Context, fileID, userRole string, userSpace model.FullUserSpace) error
 	DeletePermission(ctx context.Context, d DeletePermissionData) error
 	FindPermissionsToFile(ctx context.Context, fileID, creatorID string) ([]*string, error)
 	TogglePublic(ctx context.Context, id, creatorID string) error

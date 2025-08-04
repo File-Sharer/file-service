@@ -9,7 +9,8 @@ import (
 
 type UserSpace interface {
 	Create(ctx context.Context, d model.UserSpace) error
-	GetByID(ctx context.Context, userID string) (*model.UserSpace, error)
+	GetByUserID(ctx context.Context, userID string) (*model.UserSpace, error)
+	GetFull(ctx context.Context, userID string) (*model.FullUserSpace, error)
 	GetByUsername(ctx context.Context, username string) (*model.UserSpace, error)
 	GetSize(ctx context.Context, userID string) (int64, error)
 	UpdateLevel(ctx context.Context, userID string, newLevel uint8) error
