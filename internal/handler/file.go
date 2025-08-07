@@ -80,7 +80,7 @@ func (h *Handler) filesFindUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "error": nil, "data": files})
+	c.JSON(http.StatusOK, files)
 }
 
 func (h *Handler) filesDownload(c *gin.Context) {
